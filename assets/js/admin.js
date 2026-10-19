@@ -4,7 +4,7 @@
   const { esc, store, toast } = Ridro;
 
   // Репозиторий сайта. На *.github.io определяется по адресу, иначе берётся отсюда.
-  const CONFIG = { owner: "MrRidroking", repo: "ridroexpress", branch: "main" };
+  const CONFIG = { owner: "Lunevsky", repo: "ridroexpress", branch: "main" };
   const R = { ...CONFIG };
   if (location.hostname.endsWith(".github.io")) {
     R.owner = location.hostname.split(".")[0];
