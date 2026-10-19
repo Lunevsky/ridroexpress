@@ -22,7 +22,7 @@
   document.getElementById("org-office").textContent = site.org.office;
   document.getElementById("org-depot").textContent = site.org.depot;
   document.getElementById("links").innerHTML = site.links
-    .filter((l) => l.kind !== "staff")
+    .filter((l) => l.kind !== "staff" && l.kind !== "reports")
     .map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.title)}</a>`).join("");
 
   // ---- фильтры ----

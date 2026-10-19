@@ -5,6 +5,10 @@
   const routes = data.routes;
   const $ = (id) => document.getElementById(id);
 
+  // ---- кнопка «Отчёты» (ссылка редактируется в админке, тип reports) ----
+  const reports = site.links.find((l) => l.kind === "reports");
+  if (reports) Object.assign($("reports-link"), { href: reports.url, hidden: false });
+
   // ---- клавиша для биндов (запоминается в браузере) ----
   const keyInput = $("key");
   keyInput.value = store.get("ridro-bind-key") || "";

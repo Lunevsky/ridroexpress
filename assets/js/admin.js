@@ -308,7 +308,7 @@
   const LABELS = {
     org: "Организация", name: "Название", fullName: "Полное название", server: "Сервер", tagline: "Слоган",
     founded: "Дата основания", founders: "Учредители", director: "Директор", office: "Офис", depot: "Автопарк", goal: "Цель компании",
-    links: "Ссылки", title: "Заголовок", url: "Адрес ссылки", kind: "Тип (vk, job, map; staff — только для сотрудников)",
+    links: "Ссылки", title: "Заголовок", url: "Адрес ссылки", kind: "Тип (vk, job, map; staff — только для сотрудников; reports — кнопка «Отчёты»)",
     passengerRules: "Правила для пассажиров", ranks: "Должности", text: "Текст", tripRules: "Правила рейса",
     penalties: "Наказания", rule: "Нарушение", penalty: "Наказание", purchaseBonus: "Надбавка за покупку автобуса",
     range: "Диапазон цены", amount: "Сумма, ₽", purchaseBonusNote: "Пояснение к надбавке", liveries: "Фирменные раскраски",

@@ -30,6 +30,11 @@
       "kind": "job"
     },
     {
+      "title": "Отчёт о работе",
+      "url": "https://docs.google.com/forms/d/e/1FAIpQLScDqdO9v4hG6FA9UHzmkP3jUDYJCJ_fnA0hL_5ljy0zSOm4Yg/viewform",
+      "kind": "reports"
+    },
+    {
       "title": "Карта OpenProvinceMap",
       "url": "https://fantastic-game.ru/openprovincemap/#layer=b",
       "kind": "map"
@@ -213,7 +218,7 @@
     },
     {
       "title": "Финиш",
-      "text": "Проверьте галочку «Отправлять отчет» → STOP, затем закрывайте программу. Отправьте отчёт со скриншотами в раздел ВК с пометкой «ПИВО»."
+      "text": "Проверьте галочку «Отправлять отчет» → STOP, затем закрывайте программу. Отправьте отчёт со скриншотами через форму «Отчёты» (кнопка вверху справочника) с пометкой «ПИВО»."
     }
   ],
   "pivoFaq": [
