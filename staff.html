@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RidroExpress — сотрудникам</title>
+  <meta name="description" content="Справочник сотрудника ЧТУП «RidroExpress»: зарплаты, таблички, бинды, правила, ПИВО.">
+  <meta name="theme-color" content="#131313">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div class="stripes"></div>
+  <header class="header">
+    <div class="wrap">
+      <a class="logo" href="./">
+        <span class="plate">Ridro</span>
+        <small>Справочник<br>сотрудника</small>
+      </a>
+      <button class="burger" aria-label="Меню" aria-expanded="false">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <nav class="nav">
+        <a href="./">Пассажирам</a>
+        <a href="staff.html" aria-current="page">Сотрудникам</a>
+        <a href="https://vk.com/topic-200191092_46599855" target="_blank" rel="noopener">Отчёты ↗</a>
+        <a class="btn btn-primary btn-sm" href="https://vk.ru/ridroexpress6" target="_blank" rel="noopener">Группа ВК</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap staff-layout">
+    <nav class="side" id="side">
+      <a href="#s-routes">Маршруты</a>
+      <a href="#s-salary">Зарплата</a>
+      <a href="#s-bonus">Надбавки</a>
+      <a href="#s-ranks">Должности</a>
+      <a href="#s-rules">Правила рейса</a>
+      <a href="#s-penalties">Наказания</a>
+      <a href="#s-liveries">Раскраска</a>
+      <a href="#s-binds">Бинды</a>
+      <a href="#s-pivo">ПИВО</a>
+    </nav>
+
+    <main>
+      <section id="s-routes">
+        <h2>Маршруты</h2>
+        <p class="muted">Табличка, бинды, скриншоты и надбавки по каждому маршруту. Укажите свою клавишу — бинды подставятся с ней.</p>
+        <div class="toolbar">
+          <label class="field">Поиск<input class="input" id="rq" type="search" placeholder="Номер или остановка"></label>
+          <label class="field">Клавиша для биндов<input class="input" id="key" placeholder="например, num_1"></label>
+          <div class="chips" id="rg"></div>
+        </div>
+        <div id="route-list"></div>
+      </section>
+
+      <section id="s-salary">
+        <h2>Зарплата за рейс</h2>
+        <p class="muted" id="salary-note"></p>
+        <div class="table-wrap"><table id="salary-table"></table></div>
+      </section>
+
+      <section id="s-bonus">
+        <h2>Надбавки</h2>
+        <div class="cols">
+          <div class="panel">
+            <h3>За покупку автобуса</h3>
+            <p class="muted" id="pb-note"></p>
+            <div class="table-wrap"><table id="pb-table"></table></div>
+          </div>
+          <div class="panel">
+            <h3>Другие надбавки</h3>
+            <ul class="list">
+              <li>За тип автобуса — своя на каждом маршруте (см. карточку маршрута).</li>
+              <li>За пассажиров — по перевозчику (см. таблицу зарплат).</li>
+              <li>За ПИВО — при отправке отчёта и разделении кругов кнопкой «Круг».</li>
+              <li>Списание автобуса: 100 ₽ (без фонда) или 250 ₽ (деньги в фонд) за кругорейс.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="s-ranks">
+        <h2>Должности и повышение</h2>
+        <div class="steps" id="ranks"></div>
+      </section>
+
+      <section id="s-rules">
+        <h2>Правила во время рейса</h2>
+        <div class="panel"><ul class="list" id="rules"></ul></div>
+      </section>
+
+      <section id="s-penalties">
+        <h2>Наказания</h2>
+        <div class="table-wrap"><table id="penalties"></table></div>
+      </section>
+
+      <section id="s-liveries">
+        <h2>Фирменная раскраска</h2>
+        <p class="muted">Ненормативная раскраска — штраф 15% от ЗП за рейсы, «в стилистике» ЧТУП — 5%.</p>
+        <div class="cols" id="liveries"></div>
+      </section>
+
+      <section id="s-binds">
+        <h2>Бинды</h2>
+        <div id="binds"></div>
+      </section>
+
+      <section id="s-pivo">
+        <h2>ПИВО — трекинг рейсов</h2>
+        <p class="muted">Программа отправляет руководству ваш путь и скорость. Обязательна для надбавки.</p>
+        <div class="steps" id="pivo"></div>
+        <h3 style="margin-top:28px">Частые вопросы</h3>
+        <div id="pivo-faq"></div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <div class="wrap">
+      <span>© ЧТУП «RidroExpress» · MTA Province #6</span>
+      <span><a href="./">На главную</a> · <a href="admin.html">Управление</a></span>
+    </div>
+  </footer>
+
+  <script src="assets/js/common.js"></script>
+  <script src="assets/js/staff.js"></script>
+</body>
+</html>

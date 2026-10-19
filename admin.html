@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RidroExpress — управление</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#131313">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/admin.css">
+</head>
+<body>
+  <div class="stripes"></div>
+  <header class="header">
+    <div class="wrap">
+      <a class="logo" href="./">
+        <span class="plate">Ridro</span>
+        <small>Управление<br>сайтом</small>
+      </a>
+      <nav class="nav" style="display:flex">
+        <span class="muted" id="who"></span>
+        <button class="btn btn-ghost btn-sm" id="logout" hidden>Выйти</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Вход -->
+  <main class="wrap admin-login" id="login-view">
+    <div class="panel">
+      <h2>Вход для совладельцев</h2>
+      <p class="muted">Изменения сохраняются прямо в репозиторий сайта на GitHub. Сайт обновится примерно через минуту после сохранения.</p>
+      <form id="login-form" class="form-grid">
+        <label class="field">GitHub-токен
+          <input class="input" id="token" type="password" autocomplete="off" required placeholder="github_pat_…">
+        </label>
+        <label class="check"><input type="checkbox" id="remember" checked> Запомнить на этом устройстве</label>
+        <button class="btn btn-primary" type="submit">Войти</button>
+        <p class="error" id="login-error" role="alert"></p>
+      </form>
+      <details class="acc" style="margin-top:16px">
+        <summary><b>Как получить токен (один раз)</b></summary>
+        <div class="acc-body">
+          <ol class="howto">
+            <li>Войдите в свой аккаунт GitHub (вас должны добавить в соавторы репозитория сайта).</li>
+            <li>Откройте <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Settings → Developer settings → Fine-grained tokens → Generate new token</a>.</li>
+            <li>Resource owner — владелец репозитория (<b id="repo-owner">—</b>). Repository access — <b>Only select repositories</b> → <b id="repo-name">—</b>.</li>
+            <li>Permissions → Repository permissions → <b>Contents: Read and write</b>.</li>
+            <li>Нажмите Generate token, скопируйте и вставьте сюда. Никому не передавайте токен.</li>
+          </ol>
+        </div>
+      </details>
+    </div>
+  </main>
+
+  <!-- Редактор -->
+  <main class="wrap admin" id="app-view" hidden>
+    <div class="tabs" role="tablist">
+      <button class="chip" role="tab" data-tab="routes" aria-pressed="true">Маршруты</button>
+      <button class="chip" role="tab" data-tab="content" aria-pressed="false">Тексты и правила</button>
+      <span class="dirty" id="dirty" hidden>● Есть несохранённые изменения</span>
+      <button class="btn btn-primary" id="save" style="margin-left:auto">Сохранить на сайт</button>
+    </div>
+
+    <section id="tab-routes" class="admin-split">
+      <aside class="admin-list">
+        <input class="input" id="list-q" type="search" placeholder="Поиск маршрута">
+        <button class="btn btn-sm" id="add-route">+ Новый маршрут</button>
+        <div id="route-items"></div>
+      </aside>
+      <div class="panel" id="route-form"></div>
+    </section>
+
+    <section id="tab-content" hidden>
+      <div class="panel" id="content-form"></div>
+    </section>
+  </main>
+
+  <script src="assets/js/common.js"></script>
+  <script src="assets/js/admin.js"></script>
+</body>
+</html>

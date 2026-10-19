@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RidroExpress — маршруты</title>
+  <meta name="description" content="ЧТУП «RidroExpress» — пассажирские перевозки на MTA Province #6: маршруты, карты, стоимость проезда.">
+  <meta name="theme-color" content="#131313">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div class="stripes"></div>
+  <header class="header">
+    <div class="wrap">
+      <a class="logo" href="./">
+        <span class="plate">Ridro</span>
+        <small>ЧТУП «RidroExpress»<br>MTA Province #6</small>
+      </a>
+      <button class="burger" aria-label="Меню" aria-expanded="false">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <nav class="nav">
+        <a href="#routes">Маршруты</a>
+        <a href="#passengers">Пассажирам</a>
+        <a href="#about">О компании</a>
+        <a href="staff.html">Сотрудникам</a>
+        <a class="btn btn-primary btn-sm" href="https://vk.cc/cKjQS5" target="_blank" rel="noopener">Работа у нас</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div>
+          <div class="eyebrow">Пассажирские перевозки · сервер #6</div>
+          <h1>Едем по всему<br><span>6 региону</span></h1>
+          <p class="lead" id="tagline">Городские, пригородные и междугородние маршруты Приволжска, Жуковского, Мирного, Невского и Волчанска.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#routes">Найти маршрут</a>
+            <a class="btn btn-ghost" href="https://vk.ru/ridroexpress6" target="_blank" rel="noopener">Мы ВКонтакте</a>
+          </div>
+          <div class="stats">
+            <div class="stat"><b id="st-routes">—</b><span>маршрутов</span></div>
+            <div class="stat"><b id="st-cities">—</b><span>городов</span></div>
+            <div class="stat"><b>2023</b><span>с этого года в пути</span></div>
+          </div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 520 440" fill="none">
+            <path d="M40 120 H230 V60 H470" stroke="#2a2a2a" stroke-width="10" stroke-linecap="round"/>
+            <path d="M120 120 V330 H460 V200" stroke="#2a2a2a" stroke-width="10" stroke-linecap="round"/>
+            <path class="route-line" d="M470 60 H230 V120 H120 V250 Q120 300 170 300 H330 Q380 300 380 350 V400 M330 300 H460 V200" stroke="#FFB424" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+            <g font-family="Montserrat, sans-serif" font-size="15" font-weight="700" fill="#E8E8E8">
+              <circle cx="470" cy="60" r="10" fill="#131313" stroke="#FFB424" stroke-width="5"/><text x="380" y="40">Приволжск</text>
+              <circle cx="230" cy="120" r="8" fill="#131313" stroke="#FFB424" stroke-width="5"/><text x="244" y="146">Жуковский</text>
+              <circle cx="120" cy="250" r="8" fill="#131313" stroke="#FFB424" stroke-width="5"/><text x="20" y="232">Мирный</text>
+              <circle cx="380" cy="400" r="10" fill="#131313" stroke="#FFB424" stroke-width="5"/><text x="400" y="406">Волчанск</text>
+              <circle cx="460" cy="200" r="10" fill="#131313" stroke="#FFB424" stroke-width="5"/><text x="400" y="182">Невский</text>
+            </g>
+            <rect x="400" y="236" width="96" height="40" rx="8" fill="#FFB424"/>
+            <text x="448" y="263" text-anchor="middle" font-family="Russo One, sans-serif" font-size="20" fill="#131313">Ridro</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section id="routes">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2>Маршруты</h2>
+            <p class="muted">Нажмите на маршрут — откроется карта и все остановки.</p>
+          </div>
+        </div>
+        <div class="finder">
+          <label class="search">
+            <span class="sr-only">Поиск маршрута</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input class="input" id="q" type="search" placeholder="Номер маршрута или остановка: 407, Вокзал, Шахта…" autocomplete="off">
+          </label>
+          <div class="filters">
+            <div class="chips" id="f-city" role="group" aria-label="Город"></div>
+            <div class="chips" id="f-group" role="group" aria-label="Перевозчик"></div>
+          </div>
+        </div>
+        <div class="count" id="count"></div>
+        <div class="grid" id="grid"></div>
+      </div>
+    </section>
+
+    <section id="passengers" style="background: var(--surface); border-block: 1px solid var(--line)">
+      <div class="wrap">
+        <h2>Пассажирам</h2>
+        <div class="cols">
+          <div class="panel" style="background: var(--bg)">
+            <h3>Правила поездки</h3>
+            <ul class="list" id="p-rules"></ul>
+          </div>
+          <div class="panel" style="background: var(--bg)">
+            <h3>Оплата проезда</h3>
+            <p>Стоимость указана на табличке автобуса и в карточке маршрута. Городские маршруты — от <b id="fare-min">—</b>, междугородние — до <b id="fare-max">—</b>.</p>
+            <p class="muted">Проверить, где сейчас автобус, можно на карте OpenProvinceMap: значок автобуса → 6 сервер.</p>
+            <a class="btn btn-ghost btn-sm" href="https://fantastic-game.ru/openprovincemap/#layer=b" target="_blank" rel="noopener">Открыть карту ↗</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="wrap">
+        <div>
+          <h2>Хотите водить автобус?</h2>
+          <p>Обучение с наставником, рост от стажёра до шофёра, зарплата за каждый рейс и надбавки.</p>
+        </div>
+        <a class="btn" href="https://vk.cc/cKjQS5" target="_blank" rel="noopener">Подать заявку ↗</a>
+      </div>
+    </section>
+
+    <section id="about">
+      <div class="wrap">
+        <h2>О компании</h2>
+        <div class="cols">
+          <div class="panel">
+            <h3 id="org-name">ЧТУП «RidroExpress»</h3>
+            <p id="org-goal"></p>
+            <dl class="kv">
+              <dt>Основана</dt><dd id="org-founded"></dd>
+              <dt>Директор</dt><dd id="org-director"></dd>
+              <dt>Учредители</dt><dd id="org-founders"></dd>
+              <dt>Офис</dt><dd id="org-office"></dd>
+              <dt>Автопарк</dt><dd id="org-depot"></dd>
+            </dl>
+          </div>
+          <div class="panel">
+            <h3>Перевозчики</h3>
+            <ul class="list">
+              <li><b>ЧТУП «RidroExpress»</b> — собственные маршруты</li>
+              <li><b>АК-48 «MoonOwl»</b> — дочерняя компания</li>
+              <li><b>МУП АТП</b> и <b>МУП Троллейбусные депо</b> — совместные маршруты</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Ссылки</h3>
+            <div class="links" id="links"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <span>© ЧТУП «RidroExpress» · MTA Province #6 · ролевой проект</span>
+      <span><a href="staff.html">Для сотрудников</a> · <a href="admin.html">Управление</a></span>
+    </div>
+  </footer>
+
+  <dialog class="route" id="dlg" aria-labelledby="dlg-title"></dialog>
+
+  <script src="assets/js/common.js"></script>
+  <script src="assets/js/passenger.js"></script>
+</body>
+</html>
