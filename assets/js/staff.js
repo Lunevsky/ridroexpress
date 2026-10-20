@@ -5,9 +5,8 @@
   const routes = data.routes;
   const $ = (id) => document.getElementById(id);
 
-  // ---- кнопка «Отчёты» (ссылка редактируется в админке, тип reports) ----
+  // ссылка на Google-форму отчёта (тип reports, редактируется в админке) — для кнопки «Открыть в форме»
   const reports = site.links.find((l) => l.kind === "reports");
-  if (reports) Object.assign($("reports-link"), { href: reports.url, hidden: false });
 
   // ---- клавиша для биндов (запоминается в браузере) ----
   // Клавиша для биндов: поля стоят рядом с биндами (раздел «Бинды» и каждый маршрут), значение общее.
