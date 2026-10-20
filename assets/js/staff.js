@@ -10,13 +10,28 @@
   if (reports) Object.assign($("reports-link"), { href: reports.url, hidden: false });
 
   // ---- клавиша для биндов (запоминается в браузере) ----
-  const keyInput = $("key");
-  keyInput.value = store.get("ridro-bind-key") || "";
+  // Клавиша для биндов: поля стоят рядом с биндами (раздел «Бинды» и каждый маршрут), значение общее.
+  let bindKey = store.get("ridro-bind-key") || "";
   const KEY_RE = /^bind\s+(\|КНОПКА\||\[Клавиша\]|\[КНОПКА\[|Клавиша)\s*/i;
   const bindText = (b) => {
-    const key = keyInput.value.trim() || "|КНОПКА|";
+    const key = bindKey.trim() || "|КНОПКА|";
     return KEY_RE.test(b) ? b.replace(KEY_RE, `bind ${key} `) : `bind ${key} ${b}`;
   };
+  const bindRow = (b) => { const t = bindText(b); return `<div class="copy-row"><code data-bind="${esc(b)}">${esc(t)}</code><button class="btn btn-sm copy" data-copy="${esc(t)}">Копировать</button></div>`; };
+  const keyField = () => `<label class="field bind-key-field">Клавиша для биндов<input class="input bind-key" placeholder="например, num_1" value="${esc(bindKey)}"></label>`;
+  // смена клавиши — только тексты биндов, без перерисовки (открытые маршруты не сворачиваются)
+  document.addEventListener("input", (e) => {
+    if (!e.target.classList.contains("bind-key")) return;
+    bindKey = e.target.value;
+    store.set("ridro-bind-key", bindKey.trim());
+    document.querySelectorAll(".bind-key").forEach((x) => { if (x !== e.target) x.value = bindKey; });
+    document.querySelectorAll("code[data-bind]").forEach((c) => {
+      const t = bindText(c.dataset.bind);
+      c.textContent = t;
+      c.nextElementSibling.dataset.copy = t;
+    });
+  });
+  document.querySelectorAll(".bind-key").forEach((x) => { x.value = bindKey; });
   const copyRow = (text) => `<div class="copy-row"><code>${esc(text)}</code><button class="btn btn-sm copy" data-copy="${esc(text)}">Копировать</button></div>`;
 
   // ---- маршруты ----
@@ -42,7 +57,7 @@
         ${sign.name || sign.line1 ? `<div><h3>Табличка</h3>
           <dl class="kv"><dt>Название</dt><dd>${esc(sign.name)}</dd><dt>2-я строка</dt><dd>${esc(sign.line2)}</dd></dl>
           <p class="muted" style="margin:8px 0 6px">1-я строка:</p>${copyRow(sign.line1)}</div>` : ""}
-        ${r.binds.length ? `<div><h3>Бинд при остановке</h3><div class="binds-of">${r.binds.map((b) => copyRow(bindText(b))).join("")}</div></div>` : ""}
+        ${r.binds.length ? `<div><h3>Бинд при остановке</h3>${keyField()}<div class="binds-of">${r.binds.map(bindRow).join("")}</div></div>` : ""}
         ${bonusRows ? `<div><h3>Надбавка за тип автобуса (за кругорейс)</h3><div class="table-wrap"><table><thead><tr><th>Тип</th><th>Модели</th><th class="r">Надбавка</th></tr></thead><tbody>${bonusRows}</tbody></table></div></div>` : ""}
       </div>
     </details>`;
@@ -57,7 +72,6 @@
   };
   rg.addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) { st.group = b.dataset.v; renderRoutes(); } });
   $("rq").addEventListener("input", (e) => { st.q = e.target.value.trim().toLowerCase(); renderRoutes(); });
-  keyInput.addEventListener("input", () => { store.set("ridro-bind-key", keyInput.value.trim()); renderRoutes(); renderBinds(); });
 
   // ---- зарплата ----
   $("salary-note").textContent = "Без учёта надбавки за пассажиров. III класс — стажёр, II класс — водитель, I класс — шофёр.";
@@ -89,7 +103,7 @@
 
   // ---- бинды ----
   function renderBinds() {
-    $("binds").innerHTML = binds.map((s) => `<div class="panel" style="margin-bottom:12px"><h3>${esc(s.section)}</h3>${s.items.map((b) => copyRow(bindText(b))).join("")}</div>`).join("");
+    $("binds").innerHTML = binds.map((s) => `<div class="panel" style="margin-bottom:12px"><h3>${esc(s.section)}</h3>${s.items.map(bindRow).join("")}</div>`).join("");
   }
 
   // ---- калькулятор ЗП и отчёт: несколько строк «маршрут + автобус» ----

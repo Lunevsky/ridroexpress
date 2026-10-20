@@ -310,3 +310,4 @@ tbody tr.group-row td { background: #121212; color: var(--yellow); font-weight: 
 .trips { display: grid; gap: 12px; margin-top: 14px; }
 .trip { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 14px; background: var(--bg); }
 .trip-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; min-height: 30px; }
+.bind-key-field { max-width: 260px; margin-bottom: 10px; }

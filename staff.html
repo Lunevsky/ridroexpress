@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=20261020h">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261020i">
 </head>
 <body>
   <div class="stripes"></div>
@@ -51,10 +51,9 @@
     <main>
       <section id="s-routes">
         <h2>Маршруты</h2>
-        <p class="muted">Табличка, бинды, скриншоты и надбавки по каждому маршруту. Укажите свою клавишу — бинды подставятся с ней.</p>
+        <p class="muted">Табличка, бинды, скриншоты и надбавки по каждому маршруту.</p>
         <div class="toolbar">
           <label class="field">Поиск<input class="input" id="rq" type="search" placeholder="Номер или остановка"></label>
-          <label class="field">Клавиша для биндов<input class="input" id="key" placeholder="например, num_1"></label>
           <div class="chips" id="rg"></div>
         </div>
         <div id="route-list"></div>
@@ -156,6 +155,7 @@
 
       <section id="s-binds">
         <h2>Бинды</h2>
+        <div class="toolbar"><label class="field">Клавиша для биндов<input class="input bind-key" placeholder="например, num_1"></label></div>
         <div id="binds"></div>
       </section>
 
@@ -174,7 +174,7 @@
     </div>
   </footer>
 
-  <script src="assets/js/common.js?v=20261020h"></script>
-  <script src="assets/js/staff.js?v=20261020h"></script>
+  <script src="assets/js/common.js?v=20261020i"></script>
+  <script src="assets/js/staff.js?v=20261020i"></script>
 </body>
 </html>
