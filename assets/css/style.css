@@ -307,3 +307,6 @@ tbody tr.group-row td { background: #121212; color: var(--yellow); font-weight: 
 .report-result { margin: 0; font-weight: 600; min-height: 1.2em; }
 .report-result.ok { color: #8ee36b; }
 .report-result.bad { color: #ff8d8d; }
+.trips { display: grid; gap: 12px; margin-top: 14px; }
+.trip { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 14px; background: var(--bg); }
+.trip-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; min-height: 30px; }

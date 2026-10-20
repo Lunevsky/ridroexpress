@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=20261020e">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261020f">
 </head>
 <body>
   <div class="stripes"></div>
@@ -68,30 +68,22 @@
 
       <section id="s-calc">
         <h2>Сдать отчёт</h2>
-        <p class="muted">Посчитайте зарплату и отправьте отчёт — он сразу попадёт администрации на проверку. Ник и номер счёта сверяются с базой сотрудников.</p>
+        <p class="muted">Посчитайте зарплату и отправьте отчёт — он сразу попадёт администрации на проверку. Если ездили на нескольких маршрутах или автобусах — добавьте строки. Ник и номер счёта сверяются с базой сотрудников.</p>
         <div class="panel calc">
           <div class="calc-grid">
-            <label class="field">Маршрут<select class="input" id="c-route"></select></label>
             <label class="field">Класс<select class="input" id="c-level">
               <option value="chauffeur">Водитель I класса (шофёр)</option>
               <option value="driver" selected>Водитель II класса (водитель)</option>
               <option value="trainee">Водитель III класса (стажёр)</option>
             </select></label>
-            <label class="field">Кругорейсы<input class="input" id="c-rounds" type="number" min="0" value="1"></label>
-            <label class="field">Пассажиры<input class="input" id="c-pass" type="number" min="0" value="0"></label>
-            <label class="field">Окраска автобуса<select class="input" id="c-livery">
-              <option value="0">Фирменный или уникальный</option>
-              <option value="5">В стилистике фирменной раскраски (−5%)</option>
-              <option value="15">Ненормативный (−15%)</option>
-            </select></label>
-            <label class="field">Тип автобуса (надбавка)<select class="input" id="c-bus"></select></label>
           </div>
+          <div id="c-rows" class="trips"></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="c-add" style="margin-top:12px">+ Ещё маршрут / автобус</button>
           <div class="calc-out" id="c-out"></div>
           <form id="r-form" class="report-form" autocomplete="off">
             <div class="calc-grid">
               <label class="field">Никнейм<select class="input" id="c-nick" required><option value="">— выберите себя —</option></select></label>
               <label class="field">Номер банковского счёта<input class="input" id="r-bank" inputmode="numeric" placeholder="как в базе сотрудников" autocomplete="off" required></label>
-              <label class="field">Автобус<select class="input" id="r-bus"></select></label>
               <label class="field">ГЛОНАСС использовался?<select class="input" id="r-glonass"><option>Нет</option><option>Да</option></select></label>
             </div>
             <label class="field">Скриншоты кругорейсов (ссылки)<textarea class="input" id="r-proof-rounds" rows="2" placeholder="https://…" required></textarea></label>
@@ -182,7 +174,7 @@
     </div>
   </footer>
 
-  <script src="assets/js/common.js?v=20261020e"></script>
-  <script src="assets/js/staff.js?v=20261020e"></script>
+  <script src="assets/js/common.js?v=20261020f"></script>
+  <script src="assets/js/staff.js?v=20261020f"></script>
 </body>
 </html>

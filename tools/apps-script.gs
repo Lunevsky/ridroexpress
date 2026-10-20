@@ -232,6 +232,8 @@ function staffBanks_() {
   return out;
 }
 
+// Отчёт с сайта: общие поля (ник, счёт, класс, ГЛОНАСС, доказательства) + строки items
+// (маршрут, круги, пассажиры, автобус, окраска). Каждая строка — отдельная запись в «Выплатах».
 function submitReport_(d) {
   const fail = (msg) => ({ ok: false, error: msg });
   const who = staffBanks_()[String(d.nick || '').trim().toLowerCase()];
@@ -239,17 +241,24 @@ function submitReport_(d) {
   if (!who) return fail('Ник не найден в базе сотрудников. Пишите как в игре: Имя_Фамилия.');
   if (!who.bank) return fail('В базе сотрудников не указан ваш банковский счёт — обратитесь к администрации.');
   if (who.bank !== bank) return fail('Номер счёта не совпадает с базой сотрудников.');
-  const rounds = parseInt(d.rounds, 10);
-  const pass = parseInt(d.passengers, 10) || 0;
-  if (!(rounds >= 1 && rounds <= 100)) return fail('Кругорейсов: от 1 до 100.');
-  if (!(pass >= 0 && pass <= 1000)) return fail('Пассажиров: от 0 до 1000.');
   if (!LEVELS[d.level]) return fail('Выберите класс.');
-  if (LIVERY_TEXT[d.livery] === undefined) return fail('Выберите окраску.');
   const proof = String(d.proofRounds || '').trim();
   if (proof.length < 8) return fail('Добавьте ссылки на скриншоты кругорейсов.');
+
+  const items = Array.isArray(d.items) && d.items.length ? d.items : [d]; // старый формат — одна строка
+  if (items.length > 10) return fail('Не больше 10 строк в одном отчёте.');
   const data = siteRoutes_();
-  const route = data.routes.filter((r) => r.id === d.routeId)[0];
-  if (!route) return fail('Маршрут не найден.');
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const bad = (m) => fail(items.length > 1 ? 'Строка ' + (i + 1) + ': ' + m : m.charAt(0).toUpperCase() + m.slice(1));
+    const rounds = parseInt(it.rounds, 10);
+    const pass = parseInt(it.passengers, 10) || 0;
+    if (!data.routes.some((r) => r.id === it.routeId)) return bad('маршрут не найден.');
+    if (!(rounds >= 1 && rounds <= 100)) return bad('кругорейсов — от 1 до 100.');
+    if (!(pass >= 0 && pass <= 1000)) return bad('пассажиров — от 0 до 1000.');
+    if (LIVERY_TEXT[it.livery] === undefined) return bad('выберите окраску.');
+    if (!String(it.bus || '').trim()) return bad('выберите автобус.');
+  }
 
   // повторная отправка того же отчёта
   const sh = paySheet_();
@@ -261,17 +270,29 @@ function submitReport_(d) {
     }
   }
 
-  const rep = {
-    id: 'site-' + Utilities.getUuid(), date: new Date(), source: 'сайт',
-    nick: who.nick, bank: bank, level: LEVELS[d.level], livery: LIVERY_TEXT[d.livery],
-    routeId: route.id, route: route.number, bus: String(d.bus || '').slice(0, 200),
-    glonass: d.glonass === 'Да' ? 'Да' : 'Нет', rounds: rounds, passengers: pass,
-    proofRounds: proof.slice(0, 2000), proofPassengers: String(d.proofPassengers || '').trim().slice(0, 2000),
-    proofCosts: String(d.proofCosts || '').trim().slice(0, 2000),
-  };
-  appendReports_([rep], 'На проверке');
-  const c = calcReport_(data, rep);
-  return { ok: true, total: c.total, notes: c.notes };
+  const group = Utilities.getUuid();
+  const now = new Date();
+  const reps = items.map((it, i) => {
+    const route = data.routes.filter((r) => r.id === it.routeId)[0];
+    return {
+      id: 'site-' + group + '#' + (i + 1), date: now, source: 'сайт',
+      comment: items.length > 1 ? 'Отчёт с сайта: строка ' + (i + 1) + ' из ' + items.length : '',
+      nick: who.nick, bank: bank, level: LEVELS[d.level], livery: LIVERY_TEXT[it.livery],
+      routeId: route.id, route: route.number, bus: String(it.bus).slice(0, 200),
+      glonass: d.glonass === 'Да' ? 'Да' : 'Нет', rounds: parseInt(it.rounds, 10), passengers: parseInt(it.passengers, 10) || 0,
+      proofRounds: proof.slice(0, 2000), proofPassengers: String(d.proofPassengers || '').trim().slice(0, 2000),
+      proofCosts: String(d.proofCosts || '').trim().slice(0, 2000),
+    };
+  });
+  appendReports_(reps, 'На проверке');
+  let total = 0;
+  const notes = [];
+  reps.forEach((rep, i) => {
+    const c = calcReport_(data, rep);
+    total += c.total;
+    c.notes.forEach((x) => notes.push(reps.length > 1 ? 'строка ' + (i + 1) + ': ' + x : x));
+  });
+  return { ok: true, total: total, lines: reps.length, notes: notes };
 }
 
 // Автобусы для выбора на сайте: лист «Активный ПС» (столбцы: гараж, код, модель, госномер)
@@ -388,7 +409,7 @@ function payRow_(rep, data, status) {
   row[C['Возмещение'] - 1] = '';
   row[C['Итого'] - 1] = ''; // формула ставится после вставки
   row[C['Статус'] - 1] = status;
-  row[C['Комментарий'] - 1] = '';
+  row[C['Комментарий'] - 1] = rep.comment || '';
   row[C['Статус изменён'] - 1] = '';
   row[C['Выплачено'] - 1] = '';
   row[C['Доказательства'] - 1] = proofs;
