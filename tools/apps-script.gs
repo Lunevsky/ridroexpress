@@ -443,11 +443,11 @@ function markLedgerPaid() {
 
 function cachePut_(key, str, sec) {
   const parts = {};
-  const size = 90000;
+  const size = 30000; // символов: кириллица ≈ 2 байта, лимит кэша — 100 КБ на значение
   const n = Math.ceil(str.length / size);
   for (let i = 0; i < n; i++) parts[key + '_' + i] = str.slice(i * size, (i + 1) * size);
   parts[key] = String(n);
-  CacheService.getScriptCache().putAll(parts, sec);
+  try { CacheService.getScriptCache().putAll(parts, sec); } catch (e) { /* без кэша — просто медленнее */ }
 }
 
 function cacheGet_(key) {

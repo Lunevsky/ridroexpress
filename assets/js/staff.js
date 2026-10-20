@@ -172,7 +172,7 @@
 
   // Статус и точная сумма приходят из листа «Выплаты» (проверка админом); без них — примерный расчёт.
   const STATUS_CLASS = { "На проверке": "warn", "Одобрен": "ok", "Отклонён": "bad", "Выплачен": "" };
-  const FIRST = 5;
+  const FIRST = 10;
   let reportsList = [];
   let shown = FIRST;
   let stFilter = "all";
@@ -209,7 +209,7 @@
         <td>${esc(r.glonass)}</td><td class="r">${amount(r)}</td>
         <td>${r.status ? `<span class="badge ${STATUS_CLASS[r.status] ?? ""}">${esc(r.status)}</span>` : ""}</td></tr>`;
     }).join("");
-    const more = list.length > shown ? `<button class="btn btn-ghost" data-act="more">Показать ещё (${Math.min(25, list.length - shown)} из ${list.length - shown})</button>` : "";
+    const more = list.length > shown ? `<button class="btn btn-ghost" data-act="more">Показать ещё (${Math.min(10, list.length - shown)} из ${list.length - shown})</button>` : "";
     const hide = shown > FIRST ? `<button class="btn btn-ghost" data-act="hide">Скрыть</button>` : "";
     $("reports").innerHTML = chips + summary +
       `<div class="table-wrap"><table><thead><tr><th>Дата</th><th>Ник</th><th>Класс</th><th>Маршрут</th><th>Автобус</th><th class="r">Круги</th><th class="r">Пасс.</th><th>ГЛОНАСС</th><th class="r">ЗП</th><th>Статус</th></tr></thead><tbody>${rows}</tbody></table></div>` +
@@ -219,7 +219,7 @@
     const st = e.target.closest("#rep-st .chip");
     if (st) { stFilter = st.dataset.v; shown = FIRST; renderReports(); return; }
     const act = e.target.closest("[data-act]")?.dataset.act;
-    if (act === "more") { shown += 25; renderReports(); }
+    if (act === "more") { shown += 10; renderReports(); }
     if (act === "hide") { shown = FIRST; renderReports(); $("s-reports").scrollIntoView(); }
   });
   $("rep-q").addEventListener("input", () => { shown = FIRST; renderReports(); });
