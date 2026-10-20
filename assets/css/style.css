@@ -300,3 +300,5 @@ tbody tr.group-row td { background: #121212; color: var(--yellow); font-weight: 
 .ustav img { max-width: 100%; border-radius: 10px; margin: 8px 0; }
 .ustav-box summary { padding: 16px; }
 .more { margin-top: 12px; }
+.badge.ok { background: #183d10; color: #8ee36b; }
+.badge.bad { background: #3d1515; color: #ff8d8d; }
