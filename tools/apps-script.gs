@@ -5,8 +5,8 @@
  *
  * Что делает:
  *  • Сайт: отдаёт список сотрудников и автобусов (без банковских счетов). Список отчётов публично не отдаётся.
- *  • Админка сайта: все отчёты подробно (со счетами и доказательствами) — только после проверки
- *    GitHub-токена входа (соавтор репозитория сайта).
+ *  • Административная страница сайта: все отчёты подробно (со счетами и доказательствами), смена статуса
+ *    и комментария — только после проверки GitHub-токена входа (соавтор репозитория сайта).
  *  • Сдача отчёта на сайте: ник + номер счёта сверяются с «Базой сотрудников», отчёт строками
  *    (по строке на маршрут) добавляется в лист ответов Google-формы и в «Выплаты».
  *  • Выплаты: каждый новый отчёт (сайт или форма) сразу считается в листе «Выплаты»; «Сводка» пересчитывается.
@@ -213,7 +213,7 @@ function doPost(e) {
   try {
     lock.waitLock(20000);
     const d = JSON.parse(e.postData.contents);
-    out = d.action === 'admin' ? adminReports_(d) : submitReport_(d);
+    out = d.action === 'admin' ? adminReports_(d) : d.action === 'status' ? adminSetStatus_(d) : submitReport_(d);
   } catch (err) {
     out = { ok: false, error: 'Ошибка сервера: ' + (err && err.message ? err.message : err) };
   } finally {
@@ -249,6 +249,31 @@ function adminReports_(d) {
     ok: true, head: PAY_HEAD.concat(['_row']),
     rows: v.map((r, i) => r.map((x) => (x instanceof Date ? x.toISOString() : x)).concat([from + i])),
   };
+}
+
+// Смена статуса и/или комментария отчёта с сайта. Строка сверяется по дате и нику —
+// если в таблице за это время вставили/удалили строки, ничего не меняем.
+function adminSetStatus_(d) {
+  if (!adminOk_(d.token)) return { ok: false, error: 'Нет доступа: войдите в админку заново.' };
+  if (d.status !== undefined && STATUSES.indexOf(d.status) < 0) return { ok: false, error: 'Неизвестный статус.' };
+  const sh = SpreadsheetApp.getActive().getSheetByName(PAY_SHEET);
+  const row = Math.floor(+d.row);
+  if (!sh || !payHeaderOk_(sh) || !(row >= 2 && row <= sh.getLastRow())) return { ok: false, error: 'Отчёт не найден — нажмите «Обновить».' };
+  const v = sh.getRange(row, 1, 1, PAY_HEAD.length).getValues()[0];
+  const date = v[C['Дата отчёта'] - 1];
+  if (!(date instanceof Date) || date.toISOString() !== d.date || String(v[C['Никнейм'] - 1]) !== String(d.nick)) {
+    return { ok: false, error: 'Строки в таблице сдвинулись — нажмите «Обновить» и повторите.' };
+  }
+  if (d.status !== undefined && d.status !== v[C['Статус'] - 1]) {
+    const now = new Date();
+    sh.getRange(row, C['Статус']).setValue(d.status);
+    sh.getRange(row, C['Статус изменён'], 1, 2).setValues([[now, d.status === 'Выплачен' ? now : '']]);
+  }
+  if (d.comment !== undefined) sh.getRange(row, C['Комментарий']).setValue(String(d.comment).slice(0, 500));
+  buildSummary_();
+  cacheDrop_('ridro');
+  const r = sh.getRange(row, 1, 1, PAY_HEAD.length).getValues()[0];
+  return { ok: true, head: PAY_HEAD.concat(['_row']), row: r.map((x) => (x instanceof Date ? x.toISOString() : x)).concat([row]) };
 }
 
 // Ник → { ник как в базе, счёт (только цифры) } из «Базы сотрудников» (столбец E — счёт)

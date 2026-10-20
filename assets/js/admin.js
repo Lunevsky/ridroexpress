@@ -352,7 +352,7 @@
   // ---------- отчёты (подробно, для админов) ----------
   // Лист «Выплаты» таблицы отчётов целиком (со счетами) — Apps Script пускает только с токеном соавтора репозитория.
   const STATUS_CLASS = { "На проверке": "warn", "Одобрен": "ok", "Отклонён": "bad", "Выплачен": "" };
-  const MAIN_COLS = ["Дата отчёта", "Никнейм", "Класс", "Маршрут", "Автобус", "Круги", "Пассажиры", "Итого", "Статус", "Счёт"];
+  const MAIN_COLS = ["Дата отчёта", "Никнейм", "Маршрут", "Итого", "Статус", "Класс", "Автобус", "Круги", "Пассажиры", "Счёт"];
   const rep = { list: null, shown: 50, st: "all", q: "", week: "", open: new Set() };
   const isoDate = (v) => typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v);
   const cell = (h, v) => {
@@ -360,9 +360,25 @@
     if (isoDate(v)) return esc(new Date(v).toLocaleString("ru-RU", h === "Неделя" ? { dateStyle: "short" } : { dateStyle: "short", timeStyle: "short" }));
     if (h === "Доказательства") return esc(v).replace(/https?:\/\/[^\s<>"']+/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u.length > 40 ? u.slice(0, 40) + "…" : u}</a>`);
     if (typeof v === "number" && /ЗП|Штраф окраски$|За |Итого|Возмещение|Ставка|Надбавка/.test(h)) return Ridro.money(v);
-    if (h === "Статус") return `<span class="badge ${STATUS_CLASS[v] ?? ""}">${esc(v)}</span>`;
     return esc(v);
   };
+  const toObj = (head, r) => Object.fromEntries(head.map((h, i) => [h, r[i]]));
+  const statusSel = (r) => `<select class="input rep-status ${STATUS_CLASS[r["Статус"]] ?? ""}" data-row="${r._row}">${Object.keys(STATUS_CLASS).map((s) =>
+    `<option ${s === r["Статус"] ? "selected" : ""}>${s}</option>`).join("")}</select>`;
+  // смена статуса / комментария → Apps Script (action status), строка обновляется ответом таблицы
+  async function saveReport(r, patch) {
+    try {
+      const res = await fetch(docs.site.data.sheetApi, { method: "POST", body: JSON.stringify({
+        action: "status", token, row: r._row, date: r["Дата отчёта"], nick: r["Никнейм"], ...patch }) });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error || "ошибка таблицы");
+      Object.assign(r, toObj(j.head, j.row));
+      toast(patch.status ? `Статус: ${r["Статус"]}` : "Комментарий сохранён");
+    } catch (err) {
+      alert("Не сохранено: " + err.message);
+    }
+    renderReports();
+  }
   async function loadReports(force) {
     const box = $("reports-admin");
     if (rep.list && !force) return renderReports();
@@ -372,7 +388,7 @@
     try {
       const j = await (await fetch(api, { method: "POST", body: JSON.stringify({ action: "admin", token }) })).json();
       if (!j.ok) throw new Error(j.error || "ошибка таблицы");
-      rep.list = j.rows.map((r) => Object.fromEntries(j.head.map((h, i) => [h, r[i]]))).reverse(); // новые сверху
+      rep.list = j.rows.map((r) => toObj(j.head, r)).reverse(); // новые сверху
       renderReports();
     } catch (err) {
       box.innerHTML = `<div class="notice">Не удалось загрузить отчёты: ${esc(err.message)}</div>`;
@@ -389,8 +405,11 @@
     const rows = list.slice(0, rep.shown).map((r) => {
       const id = r._row;
       const open = rep.open.has(id);
-      return `<tr class="rep-row" data-row="${id}" style="cursor:pointer">${MAIN_COLS.map((h) => `<td${/Итого|Круги|Пассажиры/.test(h) ? ' class="r"' : ""}>${cell(h, r[h])}</td>`).join("")}</tr>` +
-        (open ? `<tr><td colspan="${MAIN_COLS.length}" style="white-space:normal"><div class="rep-detail">${head.map((h) =>
+      return `<tr class="rep-row" data-row="${id}" style="cursor:pointer">${MAIN_COLS.map((h) => `<td${/Итого|Круги|Пассажиры/.test(h) ? ' class="r"' : ""}>${h === "Статус" ? statusSel(r) : cell(h, r[h])}</td>`).join("")}</tr>` +
+        (open ? `<tr><td colspan="${MAIN_COLS.length}" style="white-space:normal">
+          <div class="rep-comment"><label class="field">Комментарий <span class="hint">виден в таблице</span><input class="input" data-comment="${id}" value="${esc(r["Комментарий"])}" maxlength="500"></label>
+          <button class="btn btn-sm" data-save-comment="${id}">Сохранить</button></div>
+          <div class="rep-detail">${head.map((h) =>
           `<div><span class="hint">${esc(h)}</span><div>${cell(h, r[h]) || "—"}</div></div>`).join("")}<div><span class="hint">Строка в таблице</span><div>${id}</div></div></div></td></tr>` : "");
     }).join("");
     box.innerHTML = `
@@ -403,7 +422,7 @@
       <div class="chips" id="rep-st" style="margin:12px 0">${["all", ...Object.keys(STATUS_CLASS)].map((s) =>
         `<button class="chip" data-v="${s}" aria-pressed="${rep.st === s}">${s === "all" ? "Все" : s}</button>`).join("")}</div>
       <p class="muted">Отчётов: ${list.length} · на проверке ${Ridro.money(sum("На проверке"))} · одобрено к выплате ${Ridro.money(sum("Одобрен"))} · выплачено ${Ridro.money(sum("Выплачен"))}.
-        Нажмите на строку — все поля и расчёт. Статусы меняются в таблице.</p>
+        Статус меняется списком в строке (сразу записывается в таблицу). Нажмите на строку — все поля, расчёт и комментарий.</p>
       ${list.length ? `<div class="table-wrap"><table><thead><tr>${MAIN_COLS.map((h) => `<th>${h === "Никнейм" ? "Ник" : esc(h)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="notice">Отчётов не найдено.</div>`}
       ${list.length > rep.shown ? `<div class="more"><button class="btn btn-ghost" id="rep-more">Показать ещё (${Math.min(50, list.length - rep.shown)} из ${list.length - rep.shown})</button></div>` : ""}`;
     const rerender = () => { rep.shown = 50; renderReports(); };
@@ -412,8 +431,17 @@
     $("rep-reload").onclick = () => loadReports(true);
     if ($("rep-more")) $("rep-more").onclick = () => { rep.shown += 50; renderReports(); };
     box.querySelector("#rep-st").onclick = (e) => { const c = e.target.closest(".chip"); if (c) { rep.st = c.dataset.v; rerender(); } };
+    const byRow = (id) => rep.list.find((r) => r._row === +id);
+    box.querySelectorAll(".rep-status").forEach((sel) => sel.onchange = () => {
+      sel.disabled = true;
+      saveReport(byRow(sel.dataset.row), { status: sel.value });
+    });
+    box.querySelectorAll("[data-save-comment]").forEach((b) => b.onclick = () => {
+      b.disabled = true;
+      saveReport(byRow(b.dataset.saveComment), { comment: box.querySelector(`[data-comment="${b.dataset.saveComment}"]`).value.trim() });
+    });
     box.querySelectorAll(".rep-row").forEach((tr) => tr.onclick = (e) => {
-      if (e.target.closest("a")) return;
+      if (e.target.closest("a, select")) return;
       const id = +tr.dataset.row;
       rep.open.has(id) ? rep.open.delete(id) : rep.open.add(id);
       renderReports();

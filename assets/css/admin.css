@@ -51,3 +51,9 @@
 
 /* Отчёты: подробности строки */
 .rep-detail { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 16px; padding: 8px 0; word-break: break-word; }
+.rep-status { padding: 4px 8px; min-width: 130px; font-size: .85rem; }
+.rep-status.ok { border-color: #31B300; }
+.rep-status.warn { border-color: var(--yellow); }
+.rep-status.bad { border-color: #ff8d8d; }
+.rep-comment { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; padding-top: 8px; }
+.rep-comment .field { flex: 1 1 280px; }
