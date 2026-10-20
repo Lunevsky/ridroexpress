@@ -199,7 +199,8 @@ function readStaff_() {
 
 function publicReports_() {
   const sh = SpreadsheetApp.getActive().getSheetByName(PAY_SHEET);
-  if (sh && sh.getLastRow() > 1) {
+  // читаем только лист текущей структуры: при другом порядке столбцов на сайт мог бы попасть не тот столбец (например, счёт)
+  if (sh && sh.getLastRow() > 1 && payHeaderOk_(sh)) {
     const v = sh.getRange(2, 1, sh.getLastRow() - 1, PAY_HEAD.length).getValues();
     const g = (r, h) => r[C[h] - 1];
     return v.filter((r) => g(r, 'Дата отчёта') instanceof Date)
@@ -211,7 +212,7 @@ function publicReports_() {
         rounds: g(r, 'Круги'), passengers: g(r, 'Пассажиры'), status: g(r, 'Статус'), total: g(r, 'Итого'),
       }));
   }
-  const pay = payIndex_();
+  const pay = sh && payHeaderOk_(sh) ? payIndex_() : {};
   return formResponses_(REPORTS_LIMIT).map((x) => {
     const o = { date: x.date.toISOString() };
     PUBLIC_FIELDS.forEach((k) => { o[k] = x[k]; });
