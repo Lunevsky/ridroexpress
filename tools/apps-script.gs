@@ -2,7 +2,9 @@
  * Ridro — данные для сайта и учёт выплат. Скрипт живёт в таблице «ЧТУП «RidroExpress» (ИП «Ridro»)».
  *
  * Что делает:
- *  • Сайт: отдаёт список сотрудников и отчёты со статусами (без банковских счетов и подписей).
+ *  • Сайт: отдаёт список сотрудников, автобусов и отчёты со статусами (без банковских счетов и подписей).
+ *  • Сдача отчёта на сайте: ник + номер счёта сверяются с «Базой сотрудников», отчёт сразу считается
+ *    и попадает в «Выплаты». Google-форма тоже продолжает работать.
  *  • Выплаты: каждый новый отчёт из формы сразу считается и попадает в лист «Выплаты»
  *    (ЗП за рейсы, штраф за окраску, надбавка за тип автобуса, за пассажиров, возмещение — вручную).
  *    Админ ставит статус «Одобрен» / «Отклонён». Раз в неделю: меню Ridro → «Сформировать ведомость»
@@ -18,6 +20,7 @@
 const STAFF_SHEET = 'База сотрудников';
 const PAY_SHEET = 'Выплаты';
 const LEDGER_SHEET = 'Ведомость';
+const FLEET_SHEET = 'Активный ПС';
 const FORM_ID = '1UQR-iV8ZK91ciFA7ByY0uuUupL4ntLjOiqT0cnGh-Wg'; // форма «Отчет ЧТУП «RidroExpress»»
 const SITE = 'https://lunevsky.github.io/ridroexpress/';
 const REPORTS_LIMIT = 300; // сколько последних отчётов отдавать сайту
@@ -46,12 +49,14 @@ const PUBLIC_FIELDS = ['nick', 'level', 'bus', 'livery', 'route', 'glonass', 'ro
 // Лист «Выплаты»: столбцы (1 = A)
 const PAY_HEAD = ['Дата отчёта', 'Неделя', 'Никнейм', 'Счёт', 'Класс', 'Маршрут', 'Автобус', 'Окраска', 'ГЛОНАСС',
   'Круги', 'Пассажиры', 'ЗП за рейсы', 'Штраф окраски', 'За автобус', 'За пассажиров', 'Возмещение', 'Итого',
-  'Статус', 'Комментарий', 'Статус изменён', 'Выплачено', 'Доказательства', 'Проверить', 'ID ответа'];
+  'Статус', 'Комментарий', 'Статус изменён', 'Выплачено', 'Доказательства', 'Проверить', 'ID ответа',
+  'Источник', 'ID маршрута'];
 const C = {}; PAY_HEAD.forEach((h, i) => { C[h] = i + 1; });
 
 /* =====================  Подсчёт ЗП (чистые функции)  ===================== */
 
 const LEVELS = { trainee: 'III (стажёр)', driver: 'II (водитель)', chauffeur: 'I (шофёр)' };
+const LIVERY_TEXT = { 0: 'Фирменный или уникальный', 5: 'В стилистике фирменной раскраски ИП (-5% от ЗП)', 15: 'Несоответствующий цветам ИП (ненормативный) (-15% от ЗП)' };
 
 function normNum_(s) {
   return String(s).toUpperCase().replace(/Ё/g, 'Е').replace(/A/g, 'А').replace(/T/g, 'Т').replace(/M/g, 'М').replace(/K/g, 'К').replace(/L/g, 'Л');
@@ -109,7 +114,7 @@ function busBonus_(route, bus) {
 // Полный расчёт одного отчёта. data — содержимое data/routes.json сайта.
 function calcReport_(data, rep) {
   const notes = [];
-  const route = matchRoute_(data.routes, rep.route);
+  const route = (rep.routeId && data.routes.filter((r) => r.id === rep.routeId)[0]) || matchRoute_(data.routes, rep.route);
   const level = levelOf_(rep.level);
   const rounds = parseInt(String(rep.rounds).replace(/\D+/g, ''), 10) || 0;
   const pass = parseInt(String(rep.passengers).replace(/\D+/g, ''), 10) || 0;
@@ -124,6 +129,7 @@ function calcReport_(data, rep) {
   if (route && pass && !(group && group.passengerBonus)) notes.push('надбавка за пассажиров не задана');
   return {
     route: route ? route.number + ' (' + (group ? group.short : route.group) + ', ' + route.from + ' → ' + route.to + ')' : String(rep.route),
+    routeId: route ? route.id : '',
     level: level ? LEVELS[level] : String(rep.level),
     rounds: rounds, pass: pass, base: base, penalty: penalty, bus: bb.amount * rounds, passengers: passengers,
     total: base - penalty + bb.amount * rounds + passengers, notes: notes,
@@ -135,14 +141,27 @@ function calcReport_(data, rep) {
 function doGet() {
   let json = cacheGet_('ridro');
   if (!json) {
-    json = JSON.stringify({ updated: new Date().toISOString(), staff: readStaff_(), reports: publicReports_() });
+    json = JSON.stringify({ updated: new Date().toISOString(), staff: readStaff_(), buses: buses_(), reports: publicReports_() });
     cachePut_('ridro', json, 300);
   }
   return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
 }
 
+function cellLink_(rich, formula) {
+  let url = '';
+  if (rich) {
+    url = rich.getLinkUrl() || '';
+    if (!url) rich.getRuns().some((run) => (url = run.getLinkUrl() || '') !== '');
+  }
+  if (!url && formula) { const m = String(formula).match(/HYPERLINK\(\s*"([^"]+)"/i); if (m) url = m[1]; }
+  return /^https?:\/\//i.test(url) ? url : '';
+}
+
 function readStaff_() {
-  const rows = SpreadsheetApp.getActive().getSheetByName(STAFF_SHEET).getDataRange().getDisplayValues();
+  const range = SpreadsheetApp.getActive().getSheetByName(STAFF_SHEET).getDataRange();
+  const rows = range.getDisplayValues();
+  const rich = range.getRichTextValues();
+  const formulas = range.getFormulas();
   const out = { total: String(rows[0][0] || '').trim(), edited: '', groups: [] };
   let group = null;
   for (let i = 1; i < rows.length; i++) {
@@ -156,12 +175,26 @@ function readStaff_() {
     if (!group) { group = { title: '', members: [] }; out.groups.push(group); }
     const m = {};
     Object.keys(STAFF_COLS).forEach((k) => { m[k] = r[STAFF_COLS[k]] || ''; });
+    m.vkUrl = cellLink_(rich[i][STAFF_COLS.vk], formulas[i][STAFF_COLS.vk]);
     group.members.push(m);
   }
   return out;
 }
 
 function publicReports_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(PAY_SHEET);
+  if (sh && sh.getLastRow() > 1) {
+    const v = sh.getRange(2, 1, sh.getLastRow() - 1, PAY_HEAD.length).getValues();
+    const g = (r, h) => r[C[h] - 1];
+    return v.filter((r) => g(r, 'Дата отчёта') instanceof Date)
+      .sort((a, b) => g(b, 'Дата отчёта') - g(a, 'Дата отчёта'))
+      .slice(0, REPORTS_LIMIT)
+      .map((r) => ({
+        date: g(r, 'Дата отчёта').toISOString(), nick: g(r, 'Никнейм'), level: g(r, 'Класс'), route: g(r, 'Маршрут'),
+        routeId: g(r, 'ID маршрута'), bus: g(r, 'Автобус'), livery: g(r, 'Окраска'), glonass: g(r, 'ГЛОНАСС'),
+        rounds: g(r, 'Круги'), passengers: g(r, 'Пассажиры'), status: g(r, 'Статус'), total: g(r, 'Итого'),
+      }));
+  }
   const pay = payIndex_();
   return formResponses_(REPORTS_LIMIT).map((x) => {
     const o = { date: x.date.toISOString() };
@@ -170,6 +203,84 @@ function publicReports_() {
     if (p) { o.status = p.status; o.total = p.total; }
     return o;
   });
+}
+
+/* =====================  Сдача отчёта с сайта  ===================== */
+
+function doPost(e) {
+  let out;
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+    out = submitReport_(JSON.parse(e.postData.contents));
+  } catch (err) {
+    out = { ok: false, error: 'Ошибка сервера: ' + (err && err.message ? err.message : err) };
+  } finally {
+    try { lock.releaseLock(); } catch (x) { /* не взят */ }
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// Ник → { ник как в базе, счёт (только цифры) } из «Базы сотрудников» (столбец E — счёт)
+function staffBanks_() {
+  const rows = SpreadsheetApp.getActive().getSheetByName(STAFF_SHEET).getDataRange().getDisplayValues();
+  const out = {};
+  rows.forEach((r) => {
+    const nick = String(r[0] || '').trim();
+    if (/^[A-Za-z]+_[A-Za-z]+$/.test(nick)) out[nick.toLowerCase()] = { nick: nick, bank: String(r[4] || '').replace(/\D/g, '') };
+  });
+  return out;
+}
+
+function submitReport_(d) {
+  const fail = (msg) => ({ ok: false, error: msg });
+  const who = staffBanks_()[String(d.nick || '').trim().toLowerCase()];
+  const bank = String(d.bank || '').replace(/\D/g, '');
+  if (!who) return fail('Ник не найден в базе сотрудников. Пишите как в игре: Имя_Фамилия.');
+  if (!who.bank) return fail('В базе сотрудников не указан ваш банковский счёт — обратитесь к администрации.');
+  if (who.bank !== bank) return fail('Номер счёта не совпадает с базой сотрудников.');
+  const rounds = parseInt(d.rounds, 10);
+  const pass = parseInt(d.passengers, 10) || 0;
+  if (!(rounds >= 1 && rounds <= 100)) return fail('Кругорейсов: от 1 до 100.');
+  if (!(pass >= 0 && pass <= 1000)) return fail('Пассажиров: от 0 до 1000.');
+  if (!LEVELS[d.level]) return fail('Выберите класс.');
+  if (LIVERY_TEXT[d.livery] === undefined) return fail('Выберите окраску.');
+  const proof = String(d.proofRounds || '').trim();
+  if (proof.length < 8) return fail('Добавьте ссылки на скриншоты кругорейсов.');
+  const data = siteRoutes_();
+  const route = data.routes.filter((r) => r.id === d.routeId)[0];
+  if (!route) return fail('Маршрут не найден.');
+
+  // повторная отправка того же отчёта
+  const sh = paySheet_();
+  if (sh.getLastRow() > 1) {
+    const from = Math.max(2, sh.getLastRow() - 300);
+    const v = sh.getRange(from, 1, sh.getLastRow() - from + 1, PAY_HEAD.length).getValues();
+    if (v.some((r) => String(r[C['Никнейм'] - 1]).toLowerCase() === who.nick.toLowerCase() && String(r[C['Доказательства'] - 1]).indexOf(proof) >= 0)) {
+      return fail('Этот отчёт уже отправлен (те же ссылки на скриншоты).');
+    }
+  }
+
+  const rep = {
+    id: 'site-' + Utilities.getUuid(), date: new Date(), source: 'сайт',
+    nick: who.nick, bank: bank, level: LEVELS[d.level], livery: LIVERY_TEXT[d.livery],
+    routeId: route.id, route: route.number, bus: String(d.bus || '').slice(0, 200),
+    glonass: d.glonass === 'Да' ? 'Да' : 'Нет', rounds: rounds, passengers: pass,
+    proofRounds: proof.slice(0, 2000), proofPassengers: String(d.proofPassengers || '').trim().slice(0, 2000),
+    proofCosts: String(d.proofCosts || '').trim().slice(0, 2000),
+  };
+  appendReports_([rep], 'На проверке');
+  const c = calcReport_(data, rep);
+  return { ok: true, total: c.total, notes: c.notes };
+}
+
+// Автобусы для выбора на сайте: лист «Активный ПС» (столбцы: гараж, код, модель, госномер)
+function buses_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(FLEET_SHEET);
+  if (!sh) return [];
+  return sh.getDataRange().getDisplayValues()
+    .filter((r) => /^[МСКЛMCKL]-\d+$/i.test(String(r[1]).trim()) && String(r[2]).trim())
+    .map((r) => '[' + String(r[1]).trim() + '] ' + String(r[2]).trim() + (String(r[3]).trim() ? ' № ' + String(r[3]).trim() : ''));
 }
 
 /* =====================  Форма  ===================== */
@@ -222,7 +333,13 @@ function weekLabel_(d) {
 function paySheet_() {
   const ss = SpreadsheetApp.getActive();
   let sh = ss.getSheetByName(PAY_SHEET);
-  if (sh) return sh;
+  if (sh) {
+    if (sh.getRange(1, PAY_HEAD.length).getValue() !== PAY_HEAD[PAY_HEAD.length - 1]) {
+      sh.getRange(1, 1, 1, PAY_HEAD.length).setValues([PAY_HEAD]).setFontWeight('bold').setBackground('#FFB424').setFontColor('#131313');
+      sh.hideColumns(C['ID маршрута']);
+    }
+    return sh;
+  }
   sh = ss.insertSheet(PAY_SHEET);
   sh.getRange(1, 1, 1, PAY_HEAD.length).setValues([PAY_HEAD]).setFontWeight('bold').setBackground('#FFB424').setFontColor('#131313');
   sh.setFrozenRows(1);
@@ -236,6 +353,7 @@ function paySheet_() {
   const color = (text, bg) => SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(text).setBackground(bg).setRanges([st]).build();
   sh.setConditionalFormatRules([color('Одобрен', '#C9F2B5'), color('Отклонён', '#F6C5C5'), color('Выплачен', '#DADADA'), color('На проверке', '#FFE7B0')]);
   sh.hideColumns(C['ID ответа']);
+  sh.hideColumns(C['ID маршрута']);
   return sh;
 }
 
@@ -276,6 +394,8 @@ function payRow_(rep, data, status) {
   row[C['Доказательства'] - 1] = proofs;
   row[C['Проверить'] - 1] = c.notes.join('; ');
   row[C['ID ответа'] - 1] = rep.id;
+  row[C['Источник'] - 1] = rep.source || 'форма';
+  row[C['ID маршрута'] - 1] = c.routeId;
   return row;
 }
 

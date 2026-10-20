@@ -170,6 +170,7 @@
   const liveryOf = (t) => (/15%/.test(t) ? 15 : /5%/.test(t) ? 5 : 0);
   const levelShort = { chauffeur: "I", driver: "II", trainee: "III" };
 
+  const routeOf = (r) => (r.routeId && routes.find((x) => x.id === r.routeId)) || matchRoute(r.route);
   // Статус и точная сумма приходят из листа «Выплаты» (проверка админом); без них — примерный расчёт.
   const STATUS_CLASS = { "На проверке": "warn", "Одобрен": "ok", "Отклонён": "bad", "Выплачен": "" };
   const FIRST = 10;
@@ -178,7 +179,7 @@
   let stFilter = "all";
   const amount = (r) => {
     if (r.total !== undefined && r.total !== "") return money(+r.total);
-    const route = matchRoute(r.route), level = levelOf(r.level);
+    const route = routeOf(r), level = levelOf(r.level);
     return route && level ? "≈ " + money(calc(route, level, parseInt(r.rounds, 10) || 0, parseInt(r.passengers, 10) || 0, liveryOf(r.livery), 0).total) : "—";
   };
   function renderReports() {
@@ -199,7 +200,7 @@
     }
     if (!list.length) { $("reports").innerHTML = chips + `<div class="notice">Отчётов не найдено.</div>`; return; }
     const rows = list.slice(0, shown).map((r) => {
-      const route = matchRoute(r.route);
+      const route = routeOf(r);
       const level = levelOf(r.level);
       const d = new Date(r.date);
       return `<tr><td>${d.toLocaleDateString("ru-RU")} ${d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
@@ -232,7 +233,7 @@
       if (!m.length) return "";
       return `<div class="panel" style="margin-bottom:12px"><h3>${esc(g.title)} <span class="badge">${m.length}</span></h3><div class="table-wrap"><table>
         <thead><tr><th>Никнейм</th><th>ВКонтакте</th><th>Должность</th><th>Уровень ЗП</th><th>Принят</th><th>Выговоры</th><th>Примечание</th></tr></thead><tbody>${
-        m.map((x) => `<tr><td><b>${esc(x.nick)}</b></td><td>${esc(x.vk)}</td><td>${esc(x.position)}</td><td>${esc(x.level)}</td><td>${esc(x.hired)}</td><td>${esc(x.warnings)}</td><td style="white-space:normal">${esc(x.note)}</td></tr>`).join("")
+        m.map((x) => `<tr><td><b>${esc(x.nick)}</b></td><td>${/^https:\/\/(m\.)?vk\.(com|ru)\//i.test(x.vkUrl || "") ? `<a href="${esc(x.vkUrl)}" target="_blank" rel="noopener">${esc(x.vk || "ВК")}</a>` : esc(x.vk)}</td><td>${esc(x.position)}</td><td>${esc(x.level)}</td><td>${esc(x.hired)}</td><td>${esc(x.warnings)}</td><td style="white-space:normal">${esc(x.note)}</td></tr>`).join("")
       }</tbody></table></div></div>`;
     }).join("") || `<div class="notice">Никого не найдено.</div>`;
   }
@@ -240,11 +241,12 @@
 
   async function loadSheet() {
     const fail = (text) => { $("reports").innerHTML = $("staff").innerHTML = `<div class="notice">${text}</div>`; };
-    if (!site.sheetApi) return fail("Скоро здесь появятся данные из таблицы сотрудников.");
+    if (!site.sheetApi) { $("r-form").hidden = true; return fail("Скоро здесь появятся данные из таблицы сотрудников."); }
     try {
       const j = await (await fetch(site.sheetApi)).json();
       staffData = j.staff;
       reportsList = j.reports || [];
+      fillBuses(j.buses || []);
       const total = staffData.groups.reduce((n, g) => n + g.members.length, 0);
       $("staff-note").textContent = `Всего: ${total}` + (staffData.edited ? ` · последние правки таблицы: ${staffData.edited}` : "");
       renderStaff();
@@ -254,6 +256,42 @@
     }
   }
   loadSheet();
+
+  // ---- сдача отчёта на сайте → таблица «Выплаты» (Apps Script doPost) ----
+  function fillBuses(list) {
+    const keep = $("r-bus").value || store.get("ridro-bus") || "";
+    $("r-bus").innerHTML = `<option value="">— выберите автобус —</option>` +
+      list.map((b) => `<option ${b === keep ? "selected" : ""}>${esc(b)}</option>`).join("");
+  }
+  $("r-bus").addEventListener("change", () => store.set("ridro-bus", $("r-bus").value));
+  $("r-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const out = $("r-result");
+    const say = (text, ok) => { out.textContent = text; out.className = "report-result " + (ok ? "ok" : "bad"); };
+    if (!$("r-bus").value) return say("Выберите автобус.", false);
+    const body = {
+      nick: $("c-nick").value.trim(), bank: $("r-bank").value.trim(), routeId: cRoute.value, level: $("c-level").value,
+      rounds: +$("c-rounds").value, passengers: +$("c-pass").value, livery: +$("c-livery").value, bus: $("r-bus").value,
+      glonass: $("r-glonass").value, proofRounds: $("r-proof-rounds").value, proofPassengers: $("r-proof-pass").value, proofCosts: $("r-proof-costs").value,
+    };
+    const btn = $("r-submit");
+    btn.disabled = true;
+    btn.textContent = "Отправляю…";
+    try {
+      // text/plain — «простой» запрос без предварительного CORS-запроса
+      const res = await (await fetch(site.sheetApi, { method: "POST", body: JSON.stringify(body) })).json();
+      if (!res.ok) return say(res.error || "Отчёт не принят.", false);
+      say(`Отчёт принят и отправлен на проверку. Расчёт: ${money(res.total)}.` + (res.notes?.length ? ` Администрация проверит: ${res.notes.join("; ")}.` : ""), true);
+      ["r-proof-rounds", "r-proof-pass", "r-proof-costs", "r-bank"].forEach((id) => { $(id).value = ""; });
+      $("r-ok").checked = false;
+      loadSheet();
+    } catch {
+      say("Не удалось отправить. Проверьте интернет и попробуйте ещё раз — или отправьте через Google-форму.", false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Отправить отчёт";
+    }
+  });
 
   // ---- устав (с Google Диска, tools/sync_drive.py) ----
   fetch("data/ustav.html", { cache: "no-cache" }).then((r) => r.text()).then((h) => { $("ustav").innerHTML = h; });

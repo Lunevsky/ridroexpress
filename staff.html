@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=20261020">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261020b">
 </head>
 <body>
   <div class="stripes"></div>
@@ -36,7 +36,7 @@
     <nav class="side" id="side">
       <a href="#s-routes">Маршруты</a>
       <a href="#s-salary">Зарплата</a>
-      <a href="#s-calc">Калькулятор ЗП</a>
+      <a href="#s-calc">Сдать отчёт</a>
       <a href="#s-reports">Отчёты</a>
       <a href="#s-staff">Сотрудники</a>
       <a href="#s-bonus">Надбавки</a>
@@ -67,8 +67,8 @@
       </section>
 
       <section id="s-calc">
-        <h2>Калькулятор зарплаты</h2>
-        <p class="muted">Примерный расчёт за отчёт. Без личной надбавки и возмещений за топливо и табличку.</p>
+        <h2>Сдать отчёт</h2>
+        <p class="muted">Посчитайте зарплату и отправьте отчёт — он сразу попадёт администрации на проверку. Ник и номер счёта сверяются с базой сотрудников.</p>
         <div class="panel calc">
           <div class="calc-grid">
             <label class="field">Маршрут<select class="input" id="c-route"></select></label>
@@ -87,11 +87,23 @@
             <label class="field">Тип автобуса (надбавка)<select class="input" id="c-bus"></select></label>
           </div>
           <div class="calc-out" id="c-out"></div>
-          <div class="calc-send">
-            <label class="field">Ваш никнейм<input class="input" id="c-nick" placeholder="Name_Surname"></label>
-            <a class="btn btn-primary" id="c-send" target="_blank" rel="noopener">Заполнить отчёт в форме ↗</a>
-          </div>
-          <p class="hint">Форма откроется с подставленными ником, классом, маршрутом, окраской, кругами и пассажирами. Счёт, автобус и скриншоты укажите в форме.</p>
+          <form id="r-form" class="report-form" autocomplete="off">
+            <div class="calc-grid">
+              <label class="field">Никнейм<input class="input" id="c-nick" placeholder="Имя_Фамилия" required></label>
+              <label class="field">Номер банковского счёта<input class="input" id="r-bank" inputmode="numeric" placeholder="как в базе сотрудников" required></label>
+              <label class="field">Автобус<select class="input" id="r-bus"></select></label>
+              <label class="field">ГЛОНАСС использовался?<select class="input" id="r-glonass"><option>Нет</option><option>Да</option></select></label>
+            </div>
+            <label class="field">Скриншоты кругорейсов (ссылки)<textarea class="input" id="r-proof-rounds" rows="2" placeholder="https://…" required></textarea></label>
+            <label class="field">Скриншоты пассажиров (ссылки, если были)<textarea class="input" id="r-proof-pass" rows="2"></textarea></label>
+            <label class="field">Доказательства трат на топливо и табличку (если нужно возмещение)<textarea class="input" id="r-proof-costs" rows="2"></textarea></label>
+            <label class="check"><input type="checkbox" id="r-ok" required> Данные в отчёте верны</label>
+            <div class="calc-send">
+              <button class="btn btn-primary" type="submit" id="r-submit">Отправить отчёт</button>
+              <a class="btn btn-ghost" id="c-send" target="_blank" rel="noopener">или через Google-форму ↗</a>
+            </div>
+            <p class="report-result" id="r-result" role="status"></p>
+          </form>
         </div>
       </section>
 
@@ -169,7 +181,7 @@
     </div>
   </footer>
 
-  <script src="assets/js/common.js?v=20261020"></script>
-  <script src="assets/js/staff.js?v=20261020"></script>
+  <script src="assets/js/common.js?v=20261020b"></script>
+  <script src="assets/js/staff.js?v=20261020b"></script>
 </body>
 </html>

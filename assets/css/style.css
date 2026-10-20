@@ -302,3 +302,8 @@ tbody tr.group-row td { background: #121212; color: var(--yellow); font-weight: 
 .more { margin-top: 12px; }
 .badge.ok { background: #183d10; color: #8ee36b; }
 .badge.bad { background: #3d1515; color: #ff8d8d; }
+.report-form { display: grid; gap: 14px; border-top: 1px solid var(--line); padding-top: 18px; }
+.check { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: .9rem; }
+.report-result { margin: 0; font-weight: 600; min-height: 1.2em; }
+.report-result.ok { color: #8ee36b; }
+.report-result.bad { color: #ff8d8d; }
