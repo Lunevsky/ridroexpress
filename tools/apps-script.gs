@@ -3,8 +3,8 @@
  *
  * Что делает:
  *  • Сайт: отдаёт список сотрудников, автобусов и отчёты со статусами (без банковских счетов и подписей).
- *  • Сдача отчёта на сайте: ник + номер счёта сверяются с «Базой сотрудников», отчёт отправляется
- *    в ту же Google-форму (как анкета, по строке на маршрут) и сразу попадает в «Выплаты».
+ *  • Сдача отчёта на сайте: ник + номер счёта сверяются с «Базой сотрудников», отчёт строками
+ *    (по строке на маршрут) добавляется в лист ответов Google-формы — рядом с анкетами — и в «Выплаты».
  *  • Выплаты: каждый новый отчёт из формы сразу считается и попадает в лист «Выплаты»
  *    (ЗП за рейсы, штраф за окраску, надбавка за тип автобуса, за пассажиров, возмещение — вручную).
  *    Админ ставит статус «Одобрен» / «Отклонён». Раз в неделю: меню Ridro → «Сформировать ведомость»
@@ -272,54 +272,25 @@ function submitReport_(d) {
     }
   }
 
-  // Каждая строка — отдельная анкета в Google-форме (там же, где отчёты, сданные через форму),
-  // затем — запись в «Выплатах» с ID этой анкеты (триггер формы её не продублирует).
-  const form = FormApp.openById(FORM_ID);
-  const byKey = {};
-  form.getItems().forEach((x) => {
-    const t = x.getTitle().trim();
-    Object.keys(FIELDS).forEach((k) => { if (t.indexOf(FIELDS[k]) === 0) byKey[k] = x; });
+  const group = Utilities.getUuid();
+  const now = new Date();
+  const reps = items.map((it, i) => {
+    const route = data.routes.filter((r) => r.id === it.routeId)[0];
+    return {
+      id: 'site-' + group + '#' + (i + 1), date: now, source: 'сайт',
+      comment: items.length > 1 ? 'Отчёт с сайта: строка ' + (i + 1) + ' из ' + items.length : 'Отчёт с сайта',
+      nick: who.nick, bank: bank, level: LEVELS[d.level], levelForm: LEVEL_FORM[d.level], livery: LIVERY_TEXT[it.livery],
+      routeId: route.id, route: route.number,
+      formRoute: route.number + (route.group === 'mup' || route.group === 'troll' ? ' (МУП, ' + route.city + ')' : ''),
+      bus: String(it.bus).slice(0, 200), glonass: d.glonass === 'Да' ? 'Да' : 'Нет',
+      rounds: parseInt(it.rounds, 10), passengers: parseInt(it.passengers, 10) || 0,
+      proofRounds: proof.slice(0, 2000), proofPassengers: String(d.proofPassengers || '').trim().slice(0, 2000),
+      proofCosts: String(d.proofCosts || '').trim().slice(0, 2000),
+    };
   });
-  const reps = [];
-  const drafts = [];
-  try {
-    items.forEach((it, i) => {
-      const route = data.routes.filter((r) => r.id === it.routeId)[0];
-      const rep = {
-        source: 'сайт', comment: items.length > 1 ? 'Отчёт с сайта: строка ' + (i + 1) + ' из ' + items.length : 'Отчёт с сайта',
-        nick: who.nick, bank: bank, level: LEVELS[d.level], livery: LIVERY_TEXT[it.livery],
-        routeId: route.id, route: route.number, bus: String(it.bus).slice(0, 200),
-        glonass: d.glonass === 'Да' ? 'Да' : 'Нет', rounds: parseInt(it.rounds, 10), passengers: parseInt(it.passengers, 10) || 0,
-        proofRounds: proof.slice(0, 2000), proofPassengers: String(d.proofPassengers || '').trim().slice(0, 2000),
-        proofCosts: String(d.proofCosts || '').trim().slice(0, 2000),
-      };
-      const values = {
-        nick: rep.nick, bank: bank, level: LEVEL_FORM[d.level], bus: rep.bus, livery: rep.livery,
-        route: route.number + (route.group === 'mup' || route.group === 'troll' ? ' (МУП, ' + route.city + ')' : ''), glonass: rep.glonass,
-        rounds: String(rep.rounds), passengers: String(rep.passengers), proofRounds: rep.proofRounds,
-        proofPassengers: rep.proofPassengers || '-', proofCosts: rep.proofCosts || '-', signature: rep.nick,
-      };
-      const fr = form.createResponse();
-      Object.keys(values).forEach((k) => { if (byKey[k]) fr.withItemResponse(itemResponse_(byKey[k], values[k])); });
-      drafts.push(fr);
-      reps.push(rep);
-    });
-  } catch (e) {
-    return fail((items.length > 1 ? 'Строка ' + (reps.length + 1) + ': ' : '') + (e && e.message ? e.message : e));
-  }
-  const sent = [];
-  try {
-    drafts.forEach((fr, i) => {
-      const r = fr.submit();
-      reps[i].id = r.getId();
-      reps[i].date = r.getTimestamp();
-      sent.push(reps[i]);
-    });
-  } catch (e) {
-    appendReports_(sent, 'На проверке');
-    return fail('Отправлено строк: ' + sent.length + ' из ' + reps.length + '. Ошибка формы: ' + (e && e.message ? e.message : e));
-  }
   appendReports_(reps, 'На проверке');
+  let sheetError = '';
+  try { appendToFormSheet_(reps); } catch (e) { sheetError = String(e && e.message ? e.message : e); }
   let total = 0;
   const notes = [];
   reps.forEach((rep, i) => {
@@ -327,30 +298,36 @@ function submitReport_(d) {
     total += c.total;
     c.notes.forEach((x) => notes.push(reps.length > 1 ? 'строка ' + (i + 1) + ': ' + x : x));
   });
+  if (sheetError) notes.push('не записан в таблицу анкет (' + sheetError + ')');
   return { ok: true, total: total, lines: reps.length, notes: notes };
 }
 
-// Ответ на вопрос формы. Для выбора — вариант ищется без учёта пробелов и регистра,
-// для автобуса — запасной поиск по коду «[К-8]».
-function itemResponse_(item, value) {
-  const T = FormApp.ItemType;
-  const title = item.getTitle().trim();
-  const pick = (choices) => {
-    const n = (x) => String(x).replace(/\s+/g, '').toLowerCase();
-    let c = choices.filter((x) => n(x.getValue()) === n(value))[0];
-    const code = (x) => (String(x).match(/^\s*\[([^\]]+)\]/) || [])[1];
-    const cn = (x) => String(x || '').toUpperCase().replace(/C/g, 'С').replace(/M/g, 'М').replace(/K/g, 'К').replace(/\s+/g, '');
-    if (!c && code(value)) c = choices.filter((x) => cn(code(x.getValue())) === cn(code(value)))[0];
-    if (!c) throw new Error('в форме нет варианта «' + value + '» (вопрос «' + title + '»).');
-    return c.getValue();
-  };
-  switch (item.getType()) {
-    case T.TEXT: return item.asTextItem().createResponse(String(value));
-    case T.PARAGRAPH_TEXT: return item.asParagraphTextItem().createResponse(String(value));
-    case T.MULTIPLE_CHOICE: return item.asMultipleChoiceItem().createResponse(pick(item.asMultipleChoiceItem().getChoices()));
-    case T.LIST: return item.asListItem().createResponse(pick(item.asListItem().getChoices()));
-    default: throw new Error('вопрос «' + title + '» неподдерживаемого типа.');
-  }
+// Лист, куда форма складывает ответы (та же таблица, что у анкет).
+function formSheet_() {
+  const form = FormApp.openById(FORM_ID);
+  if (form.getDestinationType() !== FormApp.DestinationType.SPREADSHEET) throw new Error('у формы не подключена таблица ответов');
+  const sheets = SpreadsheetApp.openById(form.getDestinationId()).getSheets();
+  const sh = sheets.filter((x) => String(x.getFormUrl() || '').indexOf(FORM_ID) >= 0)[0] || sheets.filter((x) => x.getFormUrl())[0];
+  if (!sh) throw new Error('не найден лист ответов формы');
+  return sh;
+}
+
+// Отчёт с сайта — строками в лист ответов формы, по заголовкам столбцов (вопросам формы).
+// Форма при этом не заполняется: строки просто добавляются в таблицу рядом с анкетами.
+function appendToFormSheet_(reps) {
+  if (!reps.length) return;
+  const sh = formSheet_();
+  const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map((h) => String(h).trim());
+  const keyOf = head.map((h) => Object.keys(FIELDS).filter((k) => h.indexOf(FIELDS[k]) === 0)[0] || '');
+  const rows = reps.map((rep) => {
+    const v = {
+      nick: rep.nick, bank: rep.bank, level: rep.levelForm, bus: rep.bus, livery: rep.livery, route: rep.formRoute,
+      glonass: rep.glonass, rounds: rep.rounds, passengers: rep.passengers, proofRounds: rep.proofRounds,
+      proofPassengers: rep.proofPassengers || '-', proofCosts: rep.proofCosts || '-', signature: rep.nick + ' (с сайта)',
+    };
+    return head.map((h, i) => (/^(отметка времени|timestamp)/i.test(h) ? rep.date : keyOf[i] ? v[keyOf[i]] : ''));
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, head.length).setValues(rows);
 }
 
 // Автобусы для выбора на сайте: лист «Активный ПС» (столбцы: гараж, код, модель, госномер)
@@ -467,7 +444,7 @@ function payRow_(rep, data, status) {
   row[C['Возмещение'] - 1] = '';
   row[C['Итого'] - 1] = ''; // формула ставится после вставки
   row[C['Статус'] - 1] = status;
-  row[C['Комментарий'] - 1] = rep.comment || '';  // для сайта: «Отчёт с сайта»
+  row[C['Комментарий'] - 1] = rep.comment || '';
   row[C['Статус изменён'] - 1] = '';
   row[C['Выплачено'] - 1] = '';
   row[C['Доказательства'] - 1] = proofs;
