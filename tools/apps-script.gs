@@ -59,7 +59,7 @@ const PAY_HEAD = ['Дата отчёта', 'Неделя', 'Никнейм', 'К
   'Возмещение', 'Итого', 'Расчёт',
   'Статус', 'Комментарий', 'Проверить', 'Статус изменён', 'Выплачено',
   'Счёт', 'Доказательства', 'Источник', 'ID маршрута', 'ID ответа'];
-const FORMULA_COLS = ['ЗП за рейсы', 'Штраф окраски', 'За автобус', 'За пассажиров', 'Итого', 'Расчёт'];
+const FORMULA_COLS = ['ЗП за рейсы', 'Штраф окраски', 'За автобус', 'За пассажиров', 'Итого']; // без запятых — работают при любом языке таблицы
 const MONEY_COLS = ['Ставка за круг', 'ЗП за рейсы', 'Штраф окраски', 'Надбавка за круг', 'За автобус',
   'Ставка за пассажира', 'За пассажиров', 'Возмещение', 'Итого'];
 const C = {}; PAY_HEAD.forEach((h, i) => { C[h] = i + 1; });
@@ -465,21 +465,15 @@ function colLetter_(n) {
 }
 
 // Формулы строки: суммы считаются от кругов, ставок и процента — правка любой из них пересчитывает итог.
+// Только операторы и функции с одним аргументом: разделитель аргументов («,»/«;») зависит от языка таблицы.
 function rowFormulas_(r) {
   const c = (h) => colLetter_(C[h]) + r;
-  const t = (h) => 'TEXT(' + c(h) + ',"#,##0")';
   return {
     'ЗП за рейсы': '=' + c('Круги') + '*' + c('Ставка за круг'),
     'Штраф окраски': '=ROUND(' + c('ЗП за рейсы') + '*' + c('Штраф окраски, %') + '/100)',
     'За автобус': '=' + c('Круги') + '*' + c('Надбавка за круг'),
     'За пассажиров': '=' + c('Пассажиры') + '*' + c('Ставка за пассажира'),
     'Итого': '=' + c('ЗП за рейсы') + '-' + c('Штраф окраски') + '+' + c('За автобус') + '+' + c('За пассажиров') + '+N(' + c('Возмещение') + ')',
-    'Расчёт': '=' + c('Круги') + '&" кр. × "&' + t('Ставка за круг') + '&" = "&' + t('ЗП за рейсы') +
-      '&IF(' + c('Штраф окраски') + '>0," − окраска "&' + c('Штраф окраски, %') + '&"% ("&' + t('Штраф окраски') + '&")","")' +
-      '&IF(' + c('За автобус') + '>0," + автобус "&' + c('Круги') + '&" × "&' + t('Надбавка за круг') + ',"")' +
-      '&IF(' + c('За пассажиров') + '>0," + пасс. "&' + c('Пассажиры') + '&" × "&' + t('Ставка за пассажира') + ',"")' +
-      '&IF(N(' + c('Возмещение') + ')>0," + возмещение "&' + t('Возмещение') + ',"")' +
-      '&" = "&' + t('Итого') + '&" ₽"',
   };
 }
 
@@ -491,7 +485,12 @@ function payRow_(rep, data, status) {
     'Перевозчик': c.carrier, 'Маршрут': c.route, 'Автобус': rep.bus, 'Окраска': rep.livery, 'ГЛОНАСС': rep.glonass,
     'Круги': c.rounds, 'Ставка за круг': c.rate, 'Штраф окраски, %': c.liveryPct,
     'Тип автобуса': c.busType, 'Надбавка за круг': c.busPer, 'Пассажиры': c.pass, 'Ставка за пассажира': c.passRate,
-    'Возмещение': rep.reimburse || '', 'Статус': rep.status || status, 'Комментарий': rep.comment || '', 'Проверить': c.notes.join('; '),
+    'Возмещение': rep.reimburse || '',
+    'Расчёт': calcText_((h) => ({ 'Круги': c.rounds, 'Ставка за круг': c.rate, 'ЗП за рейсы': c.base, 'Штраф окраски, %': c.liveryPct,
+      'Штраф окраски': c.penalty, 'Надбавка за круг': c.busPer, 'За автобус': c.bus, 'Пассажиры': c.pass,
+      'Ставка за пассажира': c.passRate, 'За пассажиров': c.passengers, 'Возмещение': +rep.reimburse || 0,
+      'Итого': c.total + (+rep.reimburse || 0) })[h]),
+    'Статус': rep.status || status, 'Комментарий': rep.comment || '', 'Проверить': c.notes.join('; '),
     'Статус изменён': rep.changed || '', 'Выплачено': rep.paid || '', 'Счёт': "'" + String(rep.bank || ''), 'Доказательства': proofs,
     'Источник': rep.source || 'форма', 'ID маршрута': c.routeId, 'ID ответа': rep.id || '',
   };
@@ -509,6 +508,7 @@ function writePayRows_(sh, reps, data, status) {
 function appendReports_(reps, status) {
   if (!reps.length) return 0;
   const n = writePayRows_(paySheet_(), reps, siteRoutes_(), status);
+  buildSummary_();
   cacheDrop_('ridro');
   return n;
 }
@@ -547,13 +547,18 @@ function onEdit(e) {
   if (e.range.getColumn() <= C['Статус'] && e.range.getLastColumn() >= C['Статус']) {
     sh.getRange(e.range.getRow(), C['Статус изменён'], e.range.getNumRows(), 1).setValue(new Date());
   }
+  if (payHeaderOk_(sh)) {
+    refreshCalcTexts_(sh, e.range.getRow(), e.range.getLastRow());
+    buildSummary_();
+  }
   cacheDrop_('ridro');
 }
 
 // Запускается из редактора Apps Script (▶). Окна таблицы отсюда недоступны —
 // прошлые отчёты добавляются потом из таблицы: меню Ridro → «Добавить пропущенные отчёты…».
 function setupRidro() {
-  paySheet_();
+  const pay = paySheet_();
+  refreshCalcTexts_(pay, 2, pay.getLastRow()); // «Расчёт» — текстом (старые строки с формулой тоже)
   buildSummary_();
   const has = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'onReport');
   if (!has) ScriptApp.newTrigger('onReport').forForm(FORM_ID).onFormSubmit().create();
@@ -599,6 +604,8 @@ function recalcSelected() {
     const f = rowFormulas_(r);
     FORMULA_COLS.forEach((h) => sh.getRange(r, C[h]).setFormula(f[h]));
   }
+  refreshCalcTexts_(sh, range.getRow(), range.getLastRow());
+  buildSummary_();
   cacheDrop_('ridro');
 }
 
@@ -662,47 +669,83 @@ function markLedgerPaid() {
     sh.getRange(r, C['Статус']).setValue('Выплачен');
     sh.getRange(r, C['Статус изменён'], 1, 2).setValues([[now, now]]);
   });
+  buildSummary_();
   led.getRange(1, 1).setValue(led.getRange(1, 1).getValue() + ' · ВЫПЛАЧЕНО ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd.MM.yyyy HH:mm'));
   cacheDrop_('ridro');
   ui.alert('Готово.');
 }
 
-/* =====================  Сводка (формулы, обновляется сама)  ===================== */
+/* =====================  Сводка (считает скрипт — без формул, не зависит от языка таблицы)  ===================== */
+
+function rub_(n) { return String(Math.round(+n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+
+// Текст «Расчёт» по значениям строки (g(h) — значение столбца h)
+function calcText_(g) {
+  let t = g('Круги') + ' кр. × ' + rub_(g('Ставка за круг')) + ' = ' + rub_(g('ЗП за рейсы'));
+  if (+g('Штраф окраски') > 0) t += ' − окраска ' + g('Штраф окраски, %') + '% (' + rub_(g('Штраф окраски')) + ')';
+  if (+g('За автобус') > 0) t += ' + автобус ' + g('Круги') + ' × ' + rub_(g('Надбавка за круг'));
+  if (+g('За пассажиров') > 0) t += ' + пасс. ' + g('Пассажиры') + ' × ' + rub_(g('Ставка за пассажира'));
+  if (+g('Возмещение') > 0) t += ' + возмещение ' + rub_(g('Возмещение'));
+  return t + ' = ' + rub_(g('Итого')) + ' ₽';
+}
+
+// Обновить «Расчёт» в строках from..to листа «Выплаты» (после пересчёта формул)
+function refreshCalcTexts_(sh, from, to) {
+  from = Math.max(2, from);
+  to = Math.min(to, sh.getLastRow());
+  if (to < from) return;
+  SpreadsheetApp.flush();
+  const v = sh.getRange(from, 1, to - from + 1, PAY_HEAD.length).getValues();
+  sh.getRange(from, C['Расчёт'], v.length, 1).setValues(v.map((r) => [r[C['Дата отчёта'] - 1] ? calcText_((h) => r[C[h] - 1]) : '']));
+}
 
 function buildSummary_() {
   const ss = SpreadsheetApp.getActive();
   const sh = ss.getSheetByName(SUMMARY_SHEET) || ss.insertSheet(SUMMARY_SHEET, 1);
+  const pay = ss.getSheetByName(PAY_SHEET);
+  SpreadsheetApp.flush();
+  const all = pay && payHeaderOk_(pay) && pay.getLastRow() > 1 ? pay.getRange(2, 1, pay.getLastRow() - 1, PAY_HEAD.length).getValues() : [];
+  const g = (r, h) => r[C[h] - 1];
+  const rows = all.filter((r) => g(r, 'Дата отчёта') instanceof Date);
+  const live = rows.filter((r) => g(r, 'Статус') !== 'Отклонён');
+  const group = (list, key, init, add) => {
+    const m = {};
+    list.forEach((r) => { const k = key(r); if (!m[k]) m[k] = init(r); add(m[k], r); });
+    return Object.keys(m).map((k) => m[k]);
+  };
+  const byNick = group(live, (r) => g(r, 'Никнейм'), (r) => [g(r, 'Никнейм'), 0, 0, 0],
+    (o, r) => { o[1]++; o[2] += +g(r, 'Круги') || 0; o[3] += +g(r, 'Итого') || 0; }).sort((a, b) => b[3] - a[3]);
+  const byStatus = group(rows, (r) => g(r, 'Никнейм'), (r) => [g(r, 'Никнейм')].concat(STATUSES.map(() => 0)),
+    (o, r) => { const i = STATUSES.indexOf(g(r, 'Статус')); if (i >= 0) o[i + 1] += +g(r, 'Итого') || 0; }).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  const byWeek = group(live, (r) => g(r, 'Неделя'), (r) => [g(r, 'Неделя'), 0, 0, 0, g(r, 'Дата отчёта')],
+    (o, r) => { o[1]++; o[2] += +g(r, 'Круги') || 0; o[3] += +g(r, 'Итого') || 0; if (g(r, 'Дата отчёта') < o[4]) o[4] = g(r, 'Дата отчёта'); })
+    .sort((a, b) => b[4] - a[4]).map((o) => o.slice(0, 4));
+  const byRoute = group(live, (r) => g(r, 'Маршрут'), (r) => [g(r, 'Маршрут'), 0, 0, 0, 0],
+    (o, r) => { o[1]++; o[2] += +g(r, 'Круги') || 0; o[3] += +g(r, 'Пассажиры') || 0; o[4] += +g(r, 'Итого') || 0; }).sort((a, b) => b[4] - a[4]);
+  const total = (list, cols) => ['Итого'].concat(cols.map((c) => list.reduce((s, r) => s + (+r[c] || 0), 0)));
+
   sh.clear();
-  const L = (h) => colLetter_(C[h]);
-  const src = "'" + PAY_SHEET + "'!A2:" + colLetter_(PAY_HEAD.length);
-  const notRejected = L('Статус') + " <> 'Отклонён'";
+  sh.getRange('A1').setValue('Сводка по листу «' + PAY_SHEET + '» · обновлено ' +
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd.MM.yyyy HH:mm') + ' (пересчитывается при новых отчётах и правках)').setFontWeight('bold').setFontSize(12);
   const blocks = [
-    { at: 'A', title: 'По сотрудникам (без отклонённых)', width: 4,
-      q: 'select ' + L('Никнейм') + ', count(' + L('Дата отчёта') + '), sum(' + L('Круги') + '), sum(' + L('Итого') + ') where ' + L('Никнейм') + ' is not null and ' + notRejected +
-        ' group by ' + L('Никнейм') + ' order by sum(' + L('Итого') + ') desc label ' + L('Никнейм') + " 'Сотрудник', count(" + L('Дата отчёта') + ") 'Строк', sum(" + L('Круги') + ") 'Кругов', sum(" + L('Итого') + ") 'Начислено'" },
-    { at: 'F', title: 'Сотрудники × статус, ₽', width: 5,
-      q: 'select ' + L('Никнейм') + ', sum(' + L('Итого') + ') where ' + L('Никнейм') + ' is not null group by ' + L('Никнейм') + ' pivot ' + L('Статус') + ' label ' + L('Никнейм') + " 'Сотрудник'" },
-    { at: 'L', title: 'По неделям (без отклонённых)', width: 4,
-      q: 'select ' + L('Неделя') + ', count(' + L('Дата отчёта') + '), sum(' + L('Круги') + '), sum(' + L('Итого') + ') where ' + L('Неделя') + ' is not null and ' + notRejected +
-        ' group by ' + L('Неделя') + ' label ' + L('Неделя') + " 'Неделя', count(" + L('Дата отчёта') + ") 'Строк', sum(" + L('Круги') + ") 'Кругов', sum(" + L('Итого') + ") 'Начислено'" },
-    { at: 'Q', title: 'По маршрутам (без отклонённых)', width: 5,
-      q: 'select ' + L('Маршрут') + ', count(' + L('Дата отчёта') + '), sum(' + L('Круги') + '), sum(' + L('Пассажиры') + '), sum(' + L('Итого') + ') where ' + L('Маршрут') + ' is not null and ' + notRejected +
-        ' group by ' + L('Маршрут') + ' order by sum(' + L('Итого') + ') desc label ' + L('Маршрут') + " 'Маршрут', count(" + L('Дата отчёта') + ") 'Строк', sum(" + L('Круги') + ") 'Кругов', sum(" + L('Пассажиры') + ") 'Пассажиров', sum(" + L('Итого') + ") 'Начислено'" },
+    { col: 1, title: 'По сотрудникам (без отклонённых)', head: ['Сотрудник', 'Строк', 'Кругов', 'Начислено'], rows: byNick, money: [3], sum: [1, 2, 3] },
+    { col: 6, title: 'Сотрудники × статус, ₽', head: ['Сотрудник'].concat(STATUSES), rows: byStatus, money: [1, 2, 3, 4], sum: [1, 2, 3, 4] },
+    { col: 12, title: 'По неделям (без отклонённых)', head: ['Неделя', 'Строк', 'Кругов', 'Начислено'], rows: byWeek, money: [3], sum: [1, 2, 3] },
+    { col: 17, title: 'По маршрутам (без отклонённых)', head: ['Маршрут', 'Строк', 'Кругов', 'Пассажиров', 'Начислено'], rows: byRoute, money: [4], sum: [1, 2, 3, 4] },
   ];
-  sh.getRange('A1').setValue('Сводка по листу «' + PAY_SHEET + '» — обновляется сама').setFontWeight('bold').setFontSize(12);
   blocks.forEach((b) => {
-    sh.getRange(b.at + '2').setValue(b.title).setFontWeight('bold').setFontColor('#B07A00');
-    sh.getRange(b.at + '3').setFormula('=IFERROR(QUERY(' + src + ',"' + b.q + '",0),"нет данных")');
+    const w = b.head.length;
+    sh.getRange(2, b.col).setValue(b.title).setFontWeight('bold').setFontColor('#B07A00');
+    sh.getRange(3, b.col, 1, w).setValues([b.head]).setFontWeight('bold').setBackground('#FFB424').setFontColor('#131313');
+    const data = b.rows.length ? b.rows.concat([total(b.rows, b.sum)]) : [['нет данных'].concat(b.head.slice(1).map(() => ''))];
+    sh.getRange(4, b.col, data.length, w).setValues(data);
+    if (b.rows.length) sh.getRange(4 + b.rows.length, b.col, 1, w).setFontWeight('bold');
+    b.money.forEach((m) => sh.getRange(4, b.col + m, data.length, 1).setNumberFormat('#,##0 ₽'));
   });
-  sh.getRange('B4:E').setNumberFormat('#,##0');
-  sh.getRange('D4:D').setNumberFormat('#,##0 ₽');
-  sh.getRange('G4:J').setNumberFormat('#,##0 ₽');
-  sh.getRange('O4:O').setNumberFormat('#,##0 ₽');
-  sh.getRange('U4:U').setNumberFormat('#,##0 ₽');
-  sh.setColumnWidth(1, 160);
-  sh.setColumnWidth(6, 160);
+  sh.setColumnWidth(1, 170);
+  sh.setColumnWidth(6, 170);
   sh.setColumnWidth(12, 150);
-  sh.setColumnWidth(17, 300);
+  sh.setColumnWidth(17, 320);
   sh.setFrozenRows(3);
   return sh;
 }
