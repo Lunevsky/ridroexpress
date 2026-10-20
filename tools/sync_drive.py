@@ -352,7 +352,7 @@ def build_ustav():
         style = (p.style.name or "").lower()
         if style.startswith("heading") or style == "title" or re.match(r"^(Глава|Приложение|Статья)\s", text):
             tag = "h3" if style == "title" or text.startswith(("Глава", "Приложение")) else "h4"
-            parts.append(f"<{tag}>{html.escape(text)}</{tag}>")
+            parts.append(f"<{tag}>{text}</{tag}>")  # text уже экранирован (из run_html)
         elif p.style.name and "List" in p.style.name:
             parts.append(f"<li>{body}</li>")
         else:
