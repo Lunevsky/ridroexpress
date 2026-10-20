@@ -234,82 +234,7 @@
   ["c-level", "c-nick"].forEach((id) => $(id).addEventListener("input", renderCalc));
   renderRows();
 
-  // ---- отчёты и сотрудники: из таблицы через Apps Script (tools/apps-script.gs) ----
-  const norm = (s) => String(s).toUpperCase().replace(/Ё/g, "Е").replace(/A/g, "А").replace(/T/g, "Т").replace(/M/g, "М").replace(/K/g, "К").replace(/L/g, "Л");
-  function matchRoute(text) {
-    const pref = /МУП/i.test(text) ? ["mup", "troll", "ridro", "moonowl"] : ["ridro", "moonowl", "troll", "mup"];
-    for (const tok of norm(text).split(/[^0-9А-Я]+/).filter((t) => t && t !== "МУП")) {
-      const c = routes.filter((r) => norm(r.number) === tok && r.salary);
-      // одинаковые номера (145 Жуковский / Невский) различаем по городу в тексте
-      const city = (r) => (r.city && text.toLowerCase().includes(r.city.slice(0, 4).toLowerCase()) ? 0 : 1);
-      if (c.length) return c.sort((a, b) => pref.indexOf(a.group) - pref.indexOf(b.group) || city(a) - city(b))[0];
-    }
-    return null;
-  }
-  const levelOf = (t) => {
-    const s = String(t).replace(/[IІ]/g, "l");
-    if (/стаж/i.test(s)) return "trainee"; // старые ответы формы: «Стажёр», «Водитель», «Шофёр»
-    if (/шоф/i.test(s)) return "chauffeur";
-    return /lll/.test(s) ? "trainee" : /ll/.test(s) ? "driver" : /l/.test(s) ? "chauffeur" : /водит/i.test(s) ? "driver" : null;
-  };
-  const liveryOf = (t) => (/15%/.test(t) ? 15 : /5%/.test(t) ? 5 : 0);
-  const levelShort = { chauffeur: "I", driver: "II", trainee: "III" };
-
-  const routeOf = (r) => (r.routeId && routes.find((x) => x.id === r.routeId)) || matchRoute(r.route);
-  // Статус и точная сумма приходят из листа «Выплаты» (проверка админом); без них — примерный расчёт.
-  const STATUS_CLASS = { "На проверке": "warn", "Одобрен": "ok", "Отклонён": "bad", "Выплачен": "" };
-  const FIRST = 10;
-  let reportsList = [];
-  let shown = FIRST;
-  let stFilter = "all";
-  const amount = (r) => {
-    if (r.total !== undefined && r.total !== "") return money(+r.total);
-    const route = routeOf(r), level = levelOf(r.level);
-    return route && level ? "≈ " + money(calc(route, level, parseInt(r.rounds, 10) || 0, parseInt(r.passengers, 10) || 0, liveryOf(r.livery), 0).total) : "—";
-  };
-  function renderReports() {
-    const q = $("rep-q").value.trim().toLowerCase();
-    const hasStatus = reportsList.some((r) => r.status);
-    const list = reportsList.filter((r) => (!q || `${r.nick} ${r.route}`.toLowerCase().includes(q)) && (stFilter === "all" || r.status === stFilter));
-    const chips = hasStatus ? `<div class="chips" id="rep-st" style="margin-bottom:12px">${["all", ...Object.keys(STATUS_CLASS)].map((s) =>
-      `<button class="chip" data-v="${s}" aria-pressed="${stFilter === s}">${s === "all" ? "Все" : s}</button>`).join("")}</div>` : "";
-
-    // сводка выплат, если поиск сузился до одного сотрудника
-    let summary = "";
-    if (q && hasStatus && list.length && new Set(list.map((r) => r.nick.toLowerCase())).size === 1) {
-      const sum = (s) => list.filter((r) => r.status === s).reduce((n, r) => n + (+r.total || 0), 0);
-      summary = `<div class="calc-out">
-        <div class="fact"><span>На проверке</span><b>${money(sum("На проверке"))}</b></div>
-        <div class="fact total"><span>Одобрено, к выплате</span><b>${money(sum("Одобрен"))}</b></div>
-        <div class="fact"><span>Выплачено (в списке)</span><b>${money(sum("Выплачен"))}</b></div></div>`;
-    }
-    if (!list.length) { $("reports").innerHTML = chips + `<div class="notice">Отчётов не найдено.</div>`; return; }
-    const rows = list.slice(0, shown).map((r) => {
-      const route = routeOf(r);
-      const level = levelOf(r.level);
-      const d = new Date(r.date);
-      return `<tr><td>${d.toLocaleDateString("ru-RU")} ${d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
-        <td>${esc(r.nick)}</td><td>${level ? levelShort[level] : esc(r.level)}</td>
-        <td>${route ? `<span class="num ${esc(route.group)}" style="height:26px;min-width:38px;font-size:.85rem">${esc(route.number)}</span>` : esc(r.route)}</td>
-        <td style="white-space:normal;min-width:160px">${esc(r.bus)}</td><td class="r">${esc(r.rounds)}</td><td class="r">${esc(r.passengers)}</td>
-        <td>${esc(r.glonass)}</td><td class="r">${amount(r)}</td>
-        <td>${r.status ? `<span class="badge ${STATUS_CLASS[r.status] ?? ""}">${esc(r.status)}</span>` : ""}</td></tr>`;
-    }).join("");
-    const more = list.length > shown ? `<button class="btn btn-ghost" data-act="more">Показать ещё (${Math.min(10, list.length - shown)} из ${list.length - shown})</button>` : "";
-    const hide = shown > FIRST ? `<button class="btn btn-ghost" data-act="hide">Скрыть</button>` : "";
-    $("reports").innerHTML = chips + summary +
-      `<div class="table-wrap"><table><thead><tr><th>Дата</th><th>Ник</th><th>Класс</th><th>Маршрут</th><th>Автобус</th><th class="r">Круги</th><th class="r">Пасс.</th><th>ГЛОНАСС</th><th class="r">ЗП</th><th>Статус</th></tr></thead><tbody>${rows}</tbody></table></div>` +
-      (more || hide ? `<div class="more" style="display:flex;gap:8px">${more}${hide}</div>` : "");
-  }
-  $("reports").addEventListener("click", (e) => {
-    const st = e.target.closest("#rep-st .chip");
-    if (st) { stFilter = st.dataset.v; shown = FIRST; renderReports(); return; }
-    const act = e.target.closest("[data-act]")?.dataset.act;
-    if (act === "more") { shown += 10; renderReports(); }
-    if (act === "hide") { shown = FIRST; renderReports(); $("s-reports").scrollIntoView(); }
-  });
-  $("rep-q").addEventListener("input", () => { shown = FIRST; renderReports(); });
-
+  // ---- сотрудники: из таблицы через Apps Script (tools/apps-script.gs) ----
   // ссылка ВК из ячейки таблицы: только vk.com / vk.ru, http → https
   const vkLink = (x) => {
     const u = String(x.vkUrl || "").replace(/^http:/i, "https:");
@@ -330,18 +255,16 @@
   $("staff-q").addEventListener("input", () => staffData && renderStaff());
 
   async function loadSheet() {
-    const fail = (text) => { $("reports").innerHTML = $("staff").innerHTML = `<div class="notice">${text}</div>`; };
+    const fail = (text) => { $("staff").innerHTML = `<div class="notice">${text}</div>`; };
     if (!site.sheetApi) { $("r-form").hidden = true; return fail("Скоро здесь появятся данные из таблицы сотрудников."); }
     try {
       const j = await (await fetch(site.sheetApi)).json();
       staffData = j.staff;
-      reportsList = j.reports || [];
       fillNicks(staffData);
       fillBuses(await load("buses").catch(() => j.buses || [])); // варианты — как в Google-форме (отчёт уходит туда)
       const total = staffData.groups.reduce((n, g) => n + g.members.length, 0);
       $("staff-note").textContent = `Всего: ${total}` + (staffData.edited ? ` · последние правки таблицы: ${staffData.edited}` : "");
       renderStaff();
-      renderReports();
     } catch {
       fail("Не удалось загрузить данные таблицы. Попробуйте обновить страницу позже.");
     }

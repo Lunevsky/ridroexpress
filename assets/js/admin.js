@@ -100,9 +100,12 @@
   document.querySelector(".tabs").addEventListener("click", (e) => {
     const b = e.target.closest("[data-tab]");
     if (!b) return;
-    document.querySelectorAll("[data-tab]").forEach((x) => x.setAttribute("aria-pressed", x === b));
-    $("tab-routes").hidden = b.dataset.tab !== "routes";
-    $("tab-content").hidden = b.dataset.tab !== "content";
+    document.querySelectorAll("[data-tab]").forEach((x) => {
+      x.setAttribute("aria-pressed", x === b);
+      $("tab-" + x.dataset.tab).hidden = x !== b;
+    });
+    if (b.dataset.tab === "plate") initPlate();
+    if (b.dataset.tab === "reports") loadReports();
   });
 
   // ---------- сохранение ----------
@@ -135,19 +138,24 @@
   });
 
   // ---------- ручной слой (data/manual.json) ----------
-  // Маршруты из документов на диске: руками правятся только город, конечные и примечание.
-  // Маршруты, которых нет в документах («extra»), правятся целиком.
-  const MANUAL_FIELDS = ["city", "from", "to", "note"];
+  // Маршруты из документов на диске: изменённые на сайте поля записываются в manual.routes[id]
+  // и перекрывают диск (решение пользователя 20.10.2026). «Вернуть как на диске» убирает их.
+  // Маршруты, которых нет в документах («extra»), хранятся целиком.
+  const MANUAL_FIELDS = ["city", "from", "to", "note"]; // этих полей на диске нет
+  const FIELD_NAMES = { number: "номер", group: "перевозчик", fare: "проезд", stops: "остановки", salary: "ЗП", screenshots: "скриншоты",
+    sign: "табличка", binds: "бинды", busBonus: "надбавки за автобус", map: "карта" };
   const extras = () => docs.manual.data.extra;
   const isExtra = (r) => extras().some((e) => e.id === r.id);
-  function syncManual(r) {
+  const overrides = (r) => docs.manual.data.routes[r.id] || {};
+  function syncManual(r, key) {
     if (isExtra(r)) {
       const i = extras().findIndex((e) => e.id === r.id);
       extras()[i] = { ...JSON.parse(JSON.stringify(r)), _after: extras()[i]._after ?? null };
-    } else {
-      const o = (docs.manual.data.routes[r.id] = docs.manual.data.routes[r.id] || {});
-      MANUAL_FIELDS.forEach((k) => { if (r[k]) o[k] = r[k]; else delete o[k]; });
+      return;
     }
+    const o = (docs.manual.data.routes[r.id] = docs.manual.data.routes[r.id] || {});
+    MANUAL_FIELDS.forEach((k) => { if (r[k]) o[k] = r[k]; else delete o[k]; });
+    if (key && !MANUAL_FIELDS.includes(key)) o[key] = JSON.parse(JSON.stringify(r[key] ?? null));
   }
 
   // ---------- маршруты: список ----------
@@ -186,8 +194,12 @@
     const f = $("route-form");
     if (!r) { f.innerHTML = `<p class="muted">Выберите маршрут слева.</p>`; return; }
     const cities = [...new Set(routes().map((x) => x.city).filter(Boolean))];
-    if (!isExtra(r)) return driveForm(f, r, cities);
+    const drive = !isExtra(r);
+    const changed = Object.keys(overrides(r)).filter((k) => FIELD_NAMES[k]);
     f.innerHTML = `
+      ${drive ? `<div class="notice" style="margin-bottom:18px">Маршрут из документа на Google Диске. Всё можно менять здесь — изменённые поля важнее диска.
+        ${changed.length ? `<br>Изменено на сайте: <b>${changed.map((k) => FIELD_NAMES[k]).join(", ")}</b>.
+        <button type="button" class="btn btn-ghost btn-sm" id="reset-drive" style="margin-left:8px">Вернуть как на диске</button>` : ""}</div>` : ""}
       <div class="form-block">
         <h3>Основное</h3>
         <div class="form-cols">
@@ -232,7 +244,7 @@
       </div>
       <div class="form-actions">
         <span class="hint">ID: ${esc(r.id)}</span>
-        <button type="button" class="btn btn-danger btn-sm" id="del-route">Удалить маршрут</button>
+        ${drive ? "" : `<button type="button" class="btn btn-danger btn-sm" id="del-route">Удалить маршрут</button>`}
       </div>`;
     renderBonus(r);
 
@@ -240,53 +252,27 @@
       const el = e.target;
       if (!el.name) return;
       setField(r, el.name, el.value, el.type);
-      syncManual(r);
+      syncManual(r, el.name.split(".")[0]);
       markDirty("routes");
       if (["number", "from", "to", "group"].includes(el.name)) renderList();
     };
-    $("del-route").onclick = () => {
+    if ($("reset-drive")) $("reset-drive").onclick = () => {
+      if (!confirm("Убрать правки сайта для этого маршрута? Данные вернутся с диска после сохранения (синхронизация ~1–2 мин).")) return;
+      const o = docs.manual.data.routes[r.id] || {};
+      Object.keys(o).filter((k) => !MANUAL_FIELDS.includes(k)).forEach((k) => delete o[k]);
+      markDirty("routes");
+      toast("Нажмите «Сохранить на сайт» — данные вернутся с диска");
+      selectRoute(r.id);
+    };
+    if ($("del-route")) $("del-route").onclick = () => {
       if (!confirm(`Удалить маршрут ${r.number} (${r.from} → ${r.to})?`)) return;
       docs.routes.data.routes = routes().filter((x) => x !== r);
       docs.manual.data.extra = extras().filter((e) => e.id !== r.id);
       markDirty("routes");
       selectRoute(routes()[0]?.id);
     };
-    $("add-bonus").onclick = () => { r.busBonus = r.busBonus || []; r.busBonus.push({ type: "", models: "", amount: 0 }); syncManual(r); markDirty("routes"); renderBonus(r); };
+    $("add-bonus").onclick = () => { r.busBonus = r.busBonus || []; r.busBonus.push({ type: "", models: "", amount: 0 }); syncManual(r, "busBonus"); markDirty("routes"); renderBonus(r); };
     $("map-file").onchange = (e) => uploadMap(r, e.target.files[0]);
-  }
-
-  function driveForm(f, r, cities) {
-    const s = r.salary || {};
-    f.innerHTML = `
-      <div class="notice" style="margin-bottom:18px">Этот маршрут берётся из документов на Google Диске: номер, проезд, ЗП, остановки, табличка, бинды, скриншоты, надбавки и карта.
-        Меняйте их в документе — сайт обновится сам в течение ~30 минут. Здесь правится только то, чего в документах нет.</div>
-      <div class="form-block">
-        <h3>Маршрут ${esc(r.number)} · ${esc(groups().find((g) => g.id === r.group)?.name || r.group)}</h3>
-        <div class="form-cols">
-          <label class="field">Город<input class="input" name="city" value="${esc(r.city)}" list="cities"><datalist id="cities">${cities.map((c) => `<option value="${esc(c)}">`).join("")}</datalist></label>
-          <label class="field">Откуда<input class="input" name="from" value="${esc(r.from)}"></label>
-          <label class="field">Куда<input class="input" name="to" value="${esc(r.to)}"></label>
-        </div>
-        <label class="field">Примечание <span class="hint">видно пассажирам</span><textarea class="input" name="note" rows="2">${esc(r.note)}</textarea></label>
-      </div>
-      <div class="form-block">
-        <h3>С диска (только просмотр)</h3>
-        <dl class="kv">
-          <dt>Проезд</dt><dd>${r.fare ?? "—"} ₽</dd>
-          <dt>ЗП III / II / I</dt><dd>${s.trainee ?? "—"} / ${s.driver ?? "—"} / ${s.chauffeur ?? "—"} ₽</dd>
-          <dt>Остановки</dt><dd>${esc(r.stops.join(", "))}</dd>
-          <dt>Скриншоты</dt><dd>${esc(r.screenshots.join(" → "))}</dd>
-        </dl>
-        ${r.map ? `<img class="map-preview" src="${esc(r.map)}" alt="">` : ""}
-      </div>
-      <div class="form-actions"><span class="hint">ID: ${esc(r.id)}</span></div>`;
-    f.oninput = (e) => {
-      if (!MANUAL_FIELDS.includes(e.target.name)) return;
-      r[e.target.name] = e.target.value;
-      syncManual(r);
-      markDirty("routes");
-      renderList();
-    };
   }
 
   const ARRAY_FIELDS = ["stops", "screenshots", "binds"];
@@ -311,13 +297,13 @@
       e.stopPropagation();
       const k = e.target.dataset.k;
       r.busBonus[row.dataset.i][k] = k === "amount" ? Number(e.target.value) : e.target.value;
-      syncManual(r);
+      syncManual(r, "busBonus");
       markDirty("routes");
     };
     $("bonus-rows").onclick = (e) => {
       if (!e.target.closest("[data-del]")) return;
       r.busBonus.splice(e.target.closest(".bonus-row").dataset.i, 1);
-      syncManual(r);
+      syncManual(r, "busBonus");
       markDirty("routes");
       renderBonus(r);
     };
@@ -340,14 +326,16 @@
     input.disabled = true;
     toast("Загружаю карту…");
     try {
-      const full = `assets/maps/${r.id}.jpg`;
-      const thumb = `assets/maps/thumb/${r.id}.jpg`;
+      // у маршрутов с диска — отдельный файл, иначе синхронизация перезапишет карту из документа
+      const name = isExtra(r) ? r.id : `${r.id}-site`;
+      const full = `assets/maps/${name}.jpg`;
+      const thumb = `assets/maps/thumb/${name}.jpg`;
       const [b64Full, b64Thumb, shaFull, shaThumb] = await Promise.all([
         toJpegB64(file, 1920, 0.82), toJpegB64(file, 640, 0.72), shaOf(full), shaOf(thumb),
       ]);
       await writeFile(full, b64Full, `Карта маршрута ${r.number} (${user.login})`, shaFull);
       await writeFile(thumb, b64Thumb, `Превью карты маршрута ${r.number} (${user.login})`, shaThumb);
-      if (r.map !== full) { r.map = full; syncManual(r); markDirty("routes"); }
+      if (r.map !== full) { r.map = full; syncManual(r, "map"); markDirty("routes"); }
       const prev = $("map-preview");
       prev.src = URL.createObjectURL(file);
       prev.hidden = false;
@@ -359,6 +347,106 @@
       input.disabled = false;
       input.value = "";
     }
+  }
+
+  // ---------- отчёты (подробно, для админов) ----------
+  // Лист «Выплаты» таблицы отчётов целиком (со счетами) — Apps Script пускает только с токеном соавтора репозитория.
+  const STATUS_CLASS = { "На проверке": "warn", "Одобрен": "ok", "Отклонён": "bad", "Выплачен": "" };
+  const MAIN_COLS = ["Дата отчёта", "Никнейм", "Класс", "Маршрут", "Автобус", "Круги", "Пассажиры", "Итого", "Статус", "Счёт"];
+  const rep = { list: null, shown: 50, st: "all", q: "", week: "", open: new Set() };
+  const isoDate = (v) => typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v);
+  const cell = (h, v) => {
+    if (v === "" || v == null) return "";
+    if (isoDate(v)) return esc(new Date(v).toLocaleString("ru-RU", h === "Неделя" ? { dateStyle: "short" } : { dateStyle: "short", timeStyle: "short" }));
+    if (h === "Доказательства") return esc(v).replace(/https?:\/\/[^\s<>"']+/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u.length > 40 ? u.slice(0, 40) + "…" : u}</a>`);
+    if (typeof v === "number" && /ЗП|Штраф окраски$|За |Итого|Возмещение|Ставка|Надбавка/.test(h)) return Ridro.money(v);
+    if (h === "Статус") return `<span class="badge ${STATUS_CLASS[v] ?? ""}">${esc(v)}</span>`;
+    return esc(v);
+  };
+  async function loadReports(force) {
+    const box = $("reports-admin");
+    if (rep.list && !force) return renderReports();
+    const api = docs.site.data.sheetApi;
+    if (!api) { box.innerHTML = `<div class="notice">Не задан адрес таблицы (Тексты и правила → sheetApi).</div>`; return; }
+    box.innerHTML = `<p class="muted">Загрузка…</p>`;
+    try {
+      const j = await (await fetch(api, { method: "POST", body: JSON.stringify({ action: "admin", token }) })).json();
+      if (!j.ok) throw new Error(j.error || "ошибка таблицы");
+      rep.list = j.rows.map((r) => Object.fromEntries(j.head.map((h, i) => [h, r[i]]))).reverse(); // новые сверху
+      renderReports();
+    } catch (err) {
+      box.innerHTML = `<div class="notice">Не удалось загрузить отчёты: ${esc(err.message)}</div>`;
+    }
+  }
+  function renderReports() {
+    const box = $("reports-admin");
+    const weeks = [...new Set(rep.list.map((r) => r["Неделя"]).filter(Boolean))];
+    const q = rep.q.toLowerCase();
+    const list = rep.list.filter((r) => (rep.st === "all" || r["Статус"] === rep.st) && (!rep.week || r["Неделя"] === rep.week) &&
+      (!q || `${r["Никнейм"]} ${r["Маршрут"]} ${r["Автобус"]}`.toLowerCase().includes(q)));
+    const sum = (s) => list.filter((r) => r["Статус"] === s).reduce((n, r) => n + (+r["Итого"] || 0), 0);
+    const head = Object.keys(rep.list[0] || {}).filter((h) => h !== "_row");
+    const rows = list.slice(0, rep.shown).map((r) => {
+      const id = r._row;
+      const open = rep.open.has(id);
+      return `<tr class="rep-row" data-row="${id}" style="cursor:pointer">${MAIN_COLS.map((h) => `<td${/Итого|Круги|Пассажиры/.test(h) ? ' class="r"' : ""}>${cell(h, r[h])}</td>`).join("")}</tr>` +
+        (open ? `<tr><td colspan="${MAIN_COLS.length}" style="white-space:normal"><div class="rep-detail">${head.map((h) =>
+          `<div><span class="hint">${esc(h)}</span><div>${cell(h, r[h]) || "—"}</div></div>`).join("")}<div><span class="hint">Строка в таблице</span><div>${id}</div></div></div></td></tr>` : "");
+    }).join("");
+    box.innerHTML = `
+      <div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+        <label class="field">Поиск<input class="input" id="rep-q" type="search" placeholder="Ник, маршрут, автобус" value="${esc(rep.q)}"></label>
+        <label class="field">Неделя<select class="input" id="rep-week"><option value="">Все</option>${weeks.map((w) =>
+          `<option value="${esc(w)}" ${w === rep.week ? "selected" : ""}>${cell("Неделя", w)}</option>`).join("")}</select></label>
+        <button class="btn btn-ghost btn-sm" id="rep-reload">Обновить</button>
+      </div>
+      <div class="chips" id="rep-st" style="margin:12px 0">${["all", ...Object.keys(STATUS_CLASS)].map((s) =>
+        `<button class="chip" data-v="${s}" aria-pressed="${rep.st === s}">${s === "all" ? "Все" : s}</button>`).join("")}</div>
+      <p class="muted">Отчётов: ${list.length} · на проверке ${Ridro.money(sum("На проверке"))} · одобрено к выплате ${Ridro.money(sum("Одобрен"))} · выплачено ${Ridro.money(sum("Выплачен"))}.
+        Нажмите на строку — все поля и расчёт. Статусы меняются в таблице.</p>
+      ${list.length ? `<div class="table-wrap"><table><thead><tr>${MAIN_COLS.map((h) => `<th>${h === "Никнейм" ? "Ник" : esc(h)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="notice">Отчётов не найдено.</div>`}
+      ${list.length > rep.shown ? `<div class="more"><button class="btn btn-ghost" id="rep-more">Показать ещё (${Math.min(50, list.length - rep.shown)} из ${list.length - rep.shown})</button></div>` : ""}`;
+    const rerender = () => { rep.shown = 50; renderReports(); };
+    $("rep-q").oninput = (e) => { rep.q = e.target.value; rerender(); $("rep-q").focus(); $("rep-q").setSelectionRange(rep.q.length, rep.q.length); };
+    $("rep-week").onchange = (e) => { rep.week = e.target.value; rerender(); };
+    $("rep-reload").onclick = () => loadReports(true);
+    if ($("rep-more")) $("rep-more").onclick = () => { rep.shown += 50; renderReports(); };
+    box.querySelector("#rep-st").onclick = (e) => { const c = e.target.closest(".chip"); if (c) { rep.st = c.dataset.v; rerender(); } };
+    box.querySelectorAll(".rep-row").forEach((tr) => tr.onclick = (e) => {
+      if (e.target.closest("a")) return;
+      const id = +tr.dataset.row;
+      rep.open.has(id) ? rep.open.delete(id) : rep.open.add(id);
+      renderReports();
+    });
+  }
+
+  // ---------- генератор табличек (как в игре) ----------
+  const plate = { title: "", fare: "", line1: "", line2: "" };
+  let plateReady = false;
+  function drawPlate() {
+    RidroPlate.render($("pl-preview"), plate);
+    const miss = RidroPlate.missing(plate.line1 + plate.line2);
+    $("pl-missing").textContent = miss.length ? `Нет в шрифте игры (не отобразятся в строках): ${miss.join(" ")}` : "";
+  }
+  function initPlate() {
+    if (!plateReady) {
+      plateReady = true;
+      $("pl-route").innerHTML = `<option value="">— свой текст —</option>` + routes().map((r) =>
+        `<option value="${esc(r.id)}">${esc(r.number)} · ${esc(r.from)} → ${esc(r.to)}</option>`).join("");
+      document.querySelectorAll("[data-pl]").forEach((inp) => inp.addEventListener("input", () => { plate[inp.dataset.pl] = inp.value; drawPlate(); }));
+      document.querySelectorAll("[data-pl-copy]").forEach((b) => b.addEventListener("click", () => Ridro.copy(plate[b.dataset.plCopy])));
+      $("pl-route").addEventListener("change", () => {
+        const r = routes().find((x) => x.id === $("pl-route").value);
+        if (!r) { $("pl-doc").textContent = ""; return; }
+        const n = (r.sign?.line2 || "").match(/(\d+)\s*пробел/);
+        Object.assign(plate, { title: r.number, fare: r.fare ?? "", line1: r.sign?.line1 || "", line2: n ? " ".repeat(+n[1]) : "" });
+        document.querySelectorAll("[data-pl]").forEach((inp) => { inp.value = plate[inp.dataset.pl]; });
+        $("pl-doc").textContent = r.sign?.name ? `По документу — название: ${r.sign.name}; 2-я строка: ${r.sign.line2 || "—"}` : "";
+        drawPlate();
+      });
+      window.addEventListener("resize", () => RidroPlate.fit($("pl-preview")));
+    }
+    drawPlate();
   }
 
   // ---------- тексты сайта: универсальный редактор ----------

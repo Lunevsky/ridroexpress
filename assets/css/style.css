@@ -196,10 +196,12 @@ dialog.route::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(3p
 .fact span { display: block; font-size: .78rem; color: var(--muted); }
 .fact b { font-size: 1.1rem; }
 .stops { list-style: none; margin: 0; padding: 0; position: relative; }
-.stops::before { content: ""; position: absolute; left: 7px; top: 10px; bottom: 10px; width: 3px; background: var(--yellow); border-radius: 2px; }
+/* линия — от центра первой точки до центра последней (строка ≈ 35px → центр 17px) */
+.stops::before { content: ""; position: absolute; left: 7px; top: 17px; bottom: 17px; width: 3px; background: var(--yellow); border-radius: 2px; }
 .stops li { position: relative; padding: 5px 0 5px 28px; }
 .stops li::before {
-  content: ""; position: absolute; left: 1px; top: 11px; width: 15px; height: 15px; border-radius: 50%;
+  content: ""; position: absolute; left: 1px; top: calc(50% - 7.5px); width: 15px; height: 15px; border-radius: 50%;
+  box-sizing: border-box; /* иначе рамка увеличивает кружок до 21px и он съезжает с линии */
   background: var(--surface); border: 3px solid var(--yellow);
 }
 .stops li.end { font-weight: 700; }

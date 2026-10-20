@@ -277,11 +277,6 @@ def build_routes(manual):
             if t is not None and b not in t["binds"]:
                 t["binds"].append(b)
 
-    # ручной слой: город, конечные, примечание (то, чего нет на диске)
-    for r in routes:
-        for k, v in over.get(r["id"], {}).items():
-            r[k] = v
-
     # зарплата из «Заработные платы по маршрутам» важнее, чем в описании маршрута
     qual = manual.get("salaryQualifiers", {})
     for (g, num, q), v in sal.items():
@@ -293,6 +288,11 @@ def build_routes(manual):
             used_salary.add((g, num, q))
     for k in set(sal) - used_salary:
         print("  ! зарплата без маршрута:", k)
+
+    # ручной слой — последним: правки с сайта (админка) важнее диска (решение пользователя 20.10.2026)
+    for r in routes:
+        for k, v in over.get(r["id"], {}).items():
+            r[k] = v
     return routes
 
 

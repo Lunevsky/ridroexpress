@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=20261020i">
-  <link rel="stylesheet" href="assets/css/admin.css?v=20261020i">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261020k">
+  <link rel="stylesheet" href="assets/css/admin.css?v=20261020k">
 </head>
 <body>
   <div class="stripes"></div>
@@ -64,6 +64,8 @@
     <div class="tabs" role="tablist">
       <button class="chip" role="tab" data-tab="routes" aria-pressed="true">Маршруты</button>
       <button class="chip" role="tab" data-tab="content" aria-pressed="false">Тексты и правила</button>
+      <button class="chip" role="tab" data-tab="reports" aria-pressed="false">Отчёты</button>
+      <button class="chip" role="tab" data-tab="plate" aria-pressed="false">Табличка</button>
       <span class="dirty" id="dirty" hidden>● Есть несохранённые изменения</span>
       <button class="btn btn-primary" id="save" style="margin-left:auto">Сохранить на сайт</button>
     </div>
@@ -80,9 +82,30 @@
     <section id="tab-content" hidden>
       <div class="panel" id="content-form"></div>
     </section>
+
+    <section id="tab-reports" hidden>
+      <div class="panel" id="reports-admin"><p class="muted">Загрузка…</p></div>
+    </section>
+
+    <section id="tab-plate" hidden>
+      <div class="panel plate-panel">
+        <div class="pl-wrap" id="pl-preview"></div>
+        <label class="field" style="margin-top:16px">Подставить с маршрута<select class="input" id="pl-route"><option value="">— свой текст —</option></select></label>
+        <p class="hint" id="pl-doc"></p>
+        <div class="pl-fields">
+          <div class="pl-field"><label class="field">Номер<input class="input" data-pl="title"></label><button class="btn copy" data-pl-copy="title">Копировать</button></div>
+          <div class="pl-field"><label class="field">Стоимость<input class="input" data-pl="fare"></label><button class="btn copy" data-pl-copy="fare">Копировать</button></div>
+          <div class="pl-field"><label class="field">Строка 1<input class="input" data-pl="line1"></label><button class="btn copy" data-pl-copy="line1">Копировать</button></div>
+          <div class="pl-field"><label class="field">Строка 2<input class="input" data-pl="line2"></label><button class="btn copy" data-pl-copy="line2">Копировать</button></div>
+        </div>
+        <p class="hint" id="pl-missing"></p>
+        <p class="hint">Превью — как в игре: шрифт MTA Province, перенос строк по правилам игры (по генератору RISX Nano, nano.risx.app/plate).</p>
+      </div>
+    </section>
   </main>
 
-  <script src="assets/js/common.js?v=20261020i"></script>
-  <script src="assets/js/admin.js?v=20261020i"></script>
+  <script src="assets/js/common.js?v=20261020k"></script>
+  <script src="assets/js/plate.js?v=20261020k"></script>
+  <script src="assets/js/admin.js?v=20261020k"></script>
 </body>
 </html>

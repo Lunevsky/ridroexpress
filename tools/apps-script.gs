@@ -1,23 +1,29 @@
 /**
- * Ridro — данные для сайта и учёт выплат. Скрипт живёт в таблице «ЧТУП «RidroExpress» (ИП «Ridro»)».
+ * Ridro — отчёты и учёт выплат + данные для сайта.
+ * Скрипт живёт в таблице отчётов (docs.google.com/spreadsheets/d/1GqK-bge0QOlkW0Q0DkoototwQQfRczRY4fgAYu_QbFM);
+ * сотрудников и автобусы читает из таблицы сотрудников (STAFF_ID).
  *
  * Что делает:
- *  • Сайт: отдаёт список сотрудников, автобусов и отчёты со статусами (без банковских счетов и подписей).
+ *  • Сайт: отдаёт список сотрудников и автобусов (без банковских счетов). Список отчётов публично не отдаётся.
+ *  • Админка сайта: все отчёты подробно (со счетами и доказательствами) — только после проверки
+ *    GitHub-токена входа (соавтор репозитория сайта).
  *  • Сдача отчёта на сайте: ник + номер счёта сверяются с «Базой сотрудников», отчёт строками
- *    (по строке на маршрут) добавляется в лист ответов Google-формы — рядом с анкетами — и в «Выплаты».
- *  • Выплаты: каждый новый отчёт из формы сразу считается и попадает в лист «Выплаты»
- *    (ЗП за рейсы, штраф за окраску, надбавка за тип автобуса, за пассажиров, возмещение — вручную).
+ *    (по строке на маршрут) добавляется в лист ответов Google-формы и в «Выплаты».
+ *  • Выплаты: каждый новый отчёт (сайт или форма) сразу считается в листе «Выплаты»; «Сводка» пересчитывается.
  *    Админ ставит статус «Одобрен» / «Отклонён». Раз в неделю: меню Ridro → «Сформировать ведомость»
  *    → перевести деньги → «Отметить ведомость выплаченной».
  *
- * Установка / обновление (владельцем таблицы):
- *  1. Расширения → Apps Script → заменить весь код этим → сохранить.
- *  2. Выбрать функцию setupRidro → ▶ Выполнить → разрешить доступ. Создаст/перестроит листы «Выплаты»
- *     (старый лист другой структуры сохранится копией, строки перенесутся) и «Сводка». Обновить таблицу —
- *     появится меню Ridro → «Добавить пропущенные отчёты…» (с какой даты учитывать старые отчёты).
- *  3. Развернуть → Управление развертываниями → ✎ → Версия: «Новая версия» → Развернуть
- *     (адрес /exec для сайта не меняется).
+ * Установка (владельцем, в таблице ОТЧЁТОВ):
+ *  1. Открыть таблицу отчётов → Расширения → Apps Script → вставить этот код → сохранить.
+ *  2. Выбрать функцию setupRidro → ▶ Выполнить → разрешить доступ. Создаст листы «Выплаты», «Сводка»,
+ *     перенесёт строки «Выплат» из таблицы сотрудников (там старый лист переименуется) и включит триггер формы.
+ *  3. Развернуть → Новое развертывание → Веб-приложение (выполнять от: Я, доступ: Все) → прислать адрес /exec.
+ *  4. В таблице сотрудников старый скрипт удалить (Расширения → Apps Script → удалить проект или его код и триггеры),
+ *     иначе отчёты из формы будут считаться дважды.
+ * Обновление кода: заменить код → Развернуть → Управление развертываниями → ✎ → «Новая версия».
  */
+const STAFF_ID = '1EO1SmCikWPCgX9Hkuhz2ICbHHeMDXlI5F--M2N6acbQ'; // таблица сотрудников («База сотрудников», автопарк)
+const GITHUB_REPO = 'Lunevsky/ridroexpress'; // репозиторий сайта: доступ к админке = право записи в него
 const STAFF_SHEET = 'База сотрудников';
 const PAY_SHEET = 'Выплаты';
 const LEDGER_SHEET = 'Ведомость';
@@ -25,7 +31,7 @@ const SUMMARY_SHEET = 'Сводка';
 const FLEET_SHEET = /^Активный\s*П\s*\/?\s*С/i; // «Активный П/С» или «Активный ПС»
 const FORM_ID = '1UQR-iV8ZK91ciFA7ByY0uuUupL4ntLjOiqT0cnGh-Wg'; // форма «Отчет ЧТУП «RidroExpress»»
 const SITE = 'https://lunevsky.github.io/ridroexpress/';
-const REPORTS_LIMIT = 300; // сколько последних отчётов отдавать сайту
+const ADMIN_LIMIT = 2000; // сколько последних строк «Выплат» отдавать админке
 const STATUSES = ['На проверке', 'Одобрен', 'Отклонён', 'Выплачен'];
 
 // Столбцы листа сотрудников (A = 0). Столбец E (4) — банковский счёт — на сайт не отдаётся.
@@ -154,10 +160,12 @@ function calcReport_(data, rep) {
 
 /* =====================  Сайт  ===================== */
 
+function staffSS_() { return SpreadsheetApp.openById(STAFF_ID); }
+
 function doGet() {
   let json = cacheGet_('ridro');
   if (!json) {
-    json = JSON.stringify({ updated: new Date().toISOString(), staff: readStaff_(), buses: buses_(), reports: publicReports_() });
+    json = JSON.stringify({ updated: new Date().toISOString(), staff: readStaff_(), buses: buses_() });
     cachePut_('ridro', json, 300);
   }
   return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
@@ -174,7 +182,7 @@ function cellLink_(rich, formula) {
 }
 
 function readStaff_() {
-  const range = SpreadsheetApp.getActive().getSheetByName(STAFF_SHEET).getDataRange();
+  const range = staffSS_().getSheetByName(STAFF_SHEET).getDataRange();
   const rows = range.getDisplayValues();
   const rich = range.getRichTextValues();
   const formulas = range.getFormulas();
@@ -197,31 +205,6 @@ function readStaff_() {
   return out;
 }
 
-function publicReports_() {
-  const sh = SpreadsheetApp.getActive().getSheetByName(PAY_SHEET);
-  // читаем только лист текущей структуры: при другом порядке столбцов на сайт мог бы попасть не тот столбец (например, счёт)
-  if (sh && sh.getLastRow() > 1 && payHeaderOk_(sh)) {
-    const v = sh.getRange(2, 1, sh.getLastRow() - 1, PAY_HEAD.length).getValues();
-    const g = (r, h) => r[C[h] - 1];
-    return v.filter((r) => g(r, 'Дата отчёта') instanceof Date)
-      .sort((a, b) => g(b, 'Дата отчёта') - g(a, 'Дата отчёта'))
-      .slice(0, REPORTS_LIMIT)
-      .map((r) => ({
-        date: g(r, 'Дата отчёта').toISOString(), nick: g(r, 'Никнейм'), level: g(r, 'Класс'), route: g(r, 'Маршрут'),
-        routeId: g(r, 'ID маршрута'), bus: g(r, 'Автобус'), livery: g(r, 'Окраска'), glonass: g(r, 'ГЛОНАСС'),
-        rounds: g(r, 'Круги'), passengers: g(r, 'Пассажиры'), status: g(r, 'Статус'), total: g(r, 'Итого'),
-      }));
-  }
-  const pay = sh && payHeaderOk_(sh) ? payIndex_() : {};
-  return formResponses_(REPORTS_LIMIT).map((x) => {
-    const o = { date: x.date.toISOString() };
-    PUBLIC_FIELDS.forEach((k) => { o[k] = x[k]; });
-    const p = pay[x.id];
-    if (p) { o.status = p.status; o.total = p.total; }
-    return o;
-  });
-}
-
 /* =====================  Сдача отчёта с сайта  ===================== */
 
 function doPost(e) {
@@ -229,7 +212,8 @@ function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000);
-    out = submitReport_(JSON.parse(e.postData.contents));
+    const d = JSON.parse(e.postData.contents);
+    out = d.action === 'admin' ? adminReports_(d) : submitReport_(d);
   } catch (err) {
     out = { ok: false, error: 'Ошибка сервера: ' + (err && err.message ? err.message : err) };
   } finally {
@@ -238,9 +222,38 @@ function doPost(e) {
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
+/* =====================  Админка: все отчёты подробно  ===================== */
+
+// Токен входа в админку сайта: пускаем, если у него есть право записи в репозиторий сайта (как сама админка).
+function adminOk_(token) {
+  token = String(token || '');
+  if (token.length < 20) return false;
+  const key = 'adm_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token)).slice(0, 40);
+  const cache = CacheService.getScriptCache();
+  if (cache.get(key) === '1') return true;
+  const res = UrlFetchApp.fetch('https://api.github.com/repos/' + GITHUB_REPO, {
+    headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }, muteHttpExceptions: true,
+  });
+  const ok = res.getResponseCode() === 200 && !!(JSON.parse(res.getContentText()).permissions || {}).push;
+  if (ok) cache.put(key, '1', 600);
+  return ok;
+}
+
+function adminReports_(d) {
+  if (!adminOk_(d.token)) return { ok: false, error: 'Нет доступа: войдите в админку заново.' };
+  const sh = SpreadsheetApp.getActive().getSheetByName(PAY_SHEET);
+  if (!sh || sh.getLastRow() < 2 || !payHeaderOk_(sh)) return { ok: true, head: PAY_HEAD, rows: [] };
+  const from = Math.max(2, sh.getLastRow() - ADMIN_LIMIT + 1);
+  const v = sh.getRange(from, 1, sh.getLastRow() - from + 1, PAY_HEAD.length).getValues();
+  return {
+    ok: true, head: PAY_HEAD.concat(['_row']),
+    rows: v.map((r, i) => r.map((x) => (x instanceof Date ? x.toISOString() : x)).concat([from + i])),
+  };
+}
+
 // Ник → { ник как в базе, счёт (только цифры) } из «Базы сотрудников» (столбец E — счёт)
 function staffBanks_() {
-  const rows = SpreadsheetApp.getActive().getSheetByName(STAFF_SHEET).getDataRange().getDisplayValues();
+  const rows = staffSS_().getSheetByName(STAFF_SHEET).getDataRange().getDisplayValues();
   const out = {};
   rows.forEach((r) => {
     const nick = String(r[0] || '').trim();
@@ -347,7 +360,7 @@ function appendToFormSheet_(reps) {
 
 // Автобусы для выбора на сайте: лист «Активный ПС» (столбцы: гараж, код, модель, госномер)
 function buses_() {
-  const sh = SpreadsheetApp.getActive().getSheets().filter((x) => FLEET_SHEET.test(x.getName().trim()))[0];
+  const sh = staffSS_().getSheets().filter((x) => FLEET_SHEET.test(x.getName().trim()))[0];
   if (!sh) return [];
   return sh.getDataRange().getDisplayValues()
     .filter((r) => /^[МСКЛMCKL]-\d+$/i.test(String(r[1]).trim()) && String(r[2]).trim())
@@ -439,23 +452,42 @@ function createPaySheet_(ss) {
   return sh;
 }
 
-function migratePay_(ss, old) {
-  const lastCol = old.getLastColumn();
-  const lastRow = old.getLastRow();
-  const head = old.getRange(1, 1, 1, lastCol).getValues()[0].map((h) => String(h).trim());
-  const rows = lastRow > 1 ? old.getRange(2, 1, lastRow - 1, lastCol).getValues() : [];
-  old.setName(PAY_SHEET + ' (старый ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd.MM.yyyy HH.mm') + ')');
-  const sh = createPaySheet_(ss);
+// Строки листа «Выплаты» любой из прошлых структур → отчёты для записи в новую структуру
+function repsFromSheet_(sh) {
+  const lastCol = sh.getLastColumn();
+  const lastRow = sh.getLastRow();
+  const head = sh.getRange(1, 1, 1, lastCol).getValues()[0].map((h) => String(h).trim());
+  const rows = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, lastCol).getValues() : [];
   const get = (r, h) => { const i = head.indexOf(h); return i >= 0 ? r[i] : ''; };
-  const reps = rows.filter((r) => get(r, 'Дата отчёта') instanceof Date).map((r) => ({
+  return rows.filter((r) => get(r, 'Дата отчёта') instanceof Date).map((r) => ({
     date: get(r, 'Дата отчёта'), nick: get(r, 'Никнейм'), bank: String(get(r, 'Счёт')).replace(/^'/, ''),
     level: get(r, 'Класс'), route: get(r, 'Маршрут'), routeId: get(r, 'ID маршрута'), bus: get(r, 'Автобус'),
     livery: get(r, 'Окраска'), glonass: get(r, 'ГЛОНАСС'), rounds: get(r, 'Круги'), passengers: get(r, 'Пассажиры'),
     proofRounds: get(r, 'Доказательства'), id: get(r, 'ID ответа'), source: get(r, 'Источник') || 'форма', comment: get(r, 'Комментарий'),
     status: get(r, 'Статус') || 'На проверке', changed: get(r, 'Статус изменён'), paid: get(r, 'Выплачено'), reimburse: get(r, 'Возмещение'),
   }));
+}
+
+function migratePay_(ss, old) {
+  const reps = repsFromSheet_(old);
+  old.setName(PAY_SHEET + ' (старый ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd.MM.yyyy HH.mm') + ')');
+  const sh = createPaySheet_(ss);
   if (reps.length) writePayRows_(sh, reps, siteRoutes_(), 'На проверке');
   return sh;
+}
+
+// Перенос «Выплат» из таблицы сотрудников (где скрипт жил раньше) в таблицу отчётов — один раз
+function importFromStaff_() {
+  const ss = SpreadsheetApp.getActive();
+  if (ss.getId() === STAFF_ID) return 0;
+  const cur = ss.getSheetByName(PAY_SHEET);
+  if (cur && cur.getLastRow() > 1) return 0;
+  const old = staffSS_().getSheetByName(PAY_SHEET);
+  if (!old || old.getLastRow() < 2) return 0;
+  const reps = repsFromSheet_(old);
+  if (reps.length) writePayRows_(paySheet_(), reps, siteRoutes_(), 'На проверке');
+  old.setName(PAY_SHEET + ' (перенесено в таблицу отчётов)');
+  return reps.length;
 }
 
 function colLetter_(n) {
@@ -557,13 +589,15 @@ function onEdit(e) {
 // Запускается из редактора Apps Script (▶). Окна таблицы отсюда недоступны —
 // прошлые отчёты добавляются потом из таблицы: меню Ridro → «Добавить пропущенные отчёты…».
 function setupRidro() {
+  const moved = importFromStaff_();
   const pay = paySheet_();
   refreshCalcTexts_(pay, 2, pay.getLastRow()); // «Расчёт» — текстом (старые строки с формулой тоже)
   buildSummary_();
   const has = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'onReport');
   if (!has) ScriptApp.newTrigger('onReport').forForm(FORM_ID).onFormSubmit().create();
   siteRoutes_(); // проверка доступа к сайту
-  Logger.log('Готово: листы «' + PAY_SHEET + '», «' + SUMMARY_SHEET + '» и триггер на новые отчёты. Обновите таблицу — появится меню Ridro.');
+  Logger.log('Готово: листы «' + PAY_SHEET + '», «' + SUMMARY_SHEET + '» и триггер на новые отчёты' +
+    (moved ? '; перенесено строк из таблицы сотрудников: ' + moved : '') + '. Обновите таблицу — появится меню Ridro.');
 }
 
 function rebuildSummary() { buildSummary_(); }
