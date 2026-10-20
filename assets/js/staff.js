@@ -225,6 +225,11 @@
   });
   $("rep-q").addEventListener("input", () => { shown = FIRST; renderReports(); });
 
+  // ссылка ВК из ячейки таблицы: только vk.com / vk.ru, http → https
+  const vkLink = (x) => {
+    const u = String(x.vkUrl || "").replace(/^http:/i, "https:");
+    return /^https:\/\/(m\.)?vk\.(com|ru)\//i.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(x.vk || "ВК")}</a>` : esc(x.vk);
+  };
   let staffData = null;
   function renderStaff() {
     const q = $("staff-q").value.trim().toLowerCase();
@@ -233,7 +238,7 @@
       if (!m.length) return "";
       return `<div class="panel" style="margin-bottom:12px"><h3>${esc(g.title)} <span class="badge">${m.length}</span></h3><div class="table-wrap"><table>
         <thead><tr><th>Никнейм</th><th>ВКонтакте</th><th>Должность</th><th>Уровень ЗП</th><th>Принят</th><th>Выговоры</th><th>Примечание</th></tr></thead><tbody>${
-        m.map((x) => `<tr><td><b>${esc(x.nick)}</b></td><td>${/^https:\/\/(m\.)?vk\.(com|ru)\//i.test(x.vkUrl || "") ? `<a href="${esc(x.vkUrl)}" target="_blank" rel="noopener">${esc(x.vk || "ВК")}</a>` : esc(x.vk)}</td><td>${esc(x.position)}</td><td>${esc(x.level)}</td><td>${esc(x.hired)}</td><td>${esc(x.warnings)}</td><td style="white-space:normal">${esc(x.note)}</td></tr>`).join("")
+        m.map((x) => `<tr><td><b>${esc(x.nick)}</b></td><td>${vkLink(x)}</td><td>${esc(x.position)}</td><td>${esc(x.level)}</td><td>${esc(x.hired)}</td><td>${esc(x.warnings)}</td><td style="white-space:normal">${esc(x.note)}</td></tr>`).join("")
       }</tbody></table></div></div>`;
     }).join("") || `<div class="notice">Никого не найдено.</div>`;
   }
