@@ -323,7 +323,7 @@
       staffData = j.staff;
       reportsList = j.reports || [];
       fillNicks(staffData);
-      fillBuses(j.buses && j.buses.length ? j.buses : await load("buses").catch(() => []));
+      fillBuses(await load("buses").catch(() => j.buses || [])); // варианты — как в Google-форме (отчёт уходит туда)
       const total = staffData.groups.reduce((n, g) => n + g.members.length, 0);
       $("staff-note").textContent = `Всего: ${total}` + (staffData.edited ? ` · последние правки таблицы: ${staffData.edited}` : "");
       renderStaff();

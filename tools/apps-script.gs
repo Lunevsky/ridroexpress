@@ -3,8 +3,8 @@
  *
  * Что делает:
  *  • Сайт: отдаёт список сотрудников, автобусов и отчёты со статусами (без банковских счетов и подписей).
- *  • Сдача отчёта на сайте: ник + номер счёта сверяются с «Базой сотрудников», отчёт сразу считается
- *    и попадает в «Выплаты». Google-форма тоже продолжает работать.
+ *  • Сдача отчёта на сайте: ник + номер счёта сверяются с «Базой сотрудников», отчёт отправляется
+ *    в ту же Google-форму (как анкета, по строке на маршрут) и сразу попадает в «Выплаты».
  *  • Выплаты: каждый новый отчёт из формы сразу считается и попадает в лист «Выплаты»
  *    (ЗП за рейсы, штраф за окраску, надбавка за тип автобуса, за пассажиров, возмещение — вручную).
  *    Админ ставит статус «Одобрен» / «Отклонён». Раз в неделю: меню Ridro → «Сформировать ведомость»
@@ -43,6 +43,7 @@ const FIELDS = {
   proofRounds: 'Доказательства выполнения',
   proofPassengers: 'Доказательства перевозки',
   proofCosts: 'Доказательства (в виде',
+  signature: 'Подпись',
 };
 const PUBLIC_FIELDS = ['nick', 'level', 'bus', 'livery', 'route', 'glonass', 'rounds', 'passengers'];
 
@@ -56,6 +57,7 @@ const C = {}; PAY_HEAD.forEach((h, i) => { C[h] = i + 1; });
 /* =====================  Подсчёт ЗП (чистые функции)  ===================== */
 
 const LEVELS = { trainee: 'III (стажёр)', driver: 'II (водитель)', chauffeur: 'I (шофёр)' };
+const LEVEL_FORM = { trainee: 'Водитель lll-класса', driver: 'Водитель ll-класса', chauffeur: 'Водитель l-класса' }; // варианты в форме (латинская l)
 const LIVERY_TEXT = { 0: 'Фирменный или уникальный', 5: 'В стилистике фирменной раскраски ИП (-5% от ЗП)', 15: 'Несоответствующий цветам ИП (ненормативный) (-15% от ЗП)' };
 
 function normNum_(s) {
@@ -270,20 +272,53 @@ function submitReport_(d) {
     }
   }
 
-  const group = Utilities.getUuid();
-  const now = new Date();
-  const reps = items.map((it, i) => {
-    const route = data.routes.filter((r) => r.id === it.routeId)[0];
-    return {
-      id: 'site-' + group + '#' + (i + 1), date: now, source: 'сайт',
-      comment: items.length > 1 ? 'Отчёт с сайта: строка ' + (i + 1) + ' из ' + items.length : '',
-      nick: who.nick, bank: bank, level: LEVELS[d.level], livery: LIVERY_TEXT[it.livery],
-      routeId: route.id, route: route.number, bus: String(it.bus).slice(0, 200),
-      glonass: d.glonass === 'Да' ? 'Да' : 'Нет', rounds: parseInt(it.rounds, 10), passengers: parseInt(it.passengers, 10) || 0,
-      proofRounds: proof.slice(0, 2000), proofPassengers: String(d.proofPassengers || '').trim().slice(0, 2000),
-      proofCosts: String(d.proofCosts || '').trim().slice(0, 2000),
-    };
+  // Каждая строка — отдельная анкета в Google-форме (там же, где отчёты, сданные через форму),
+  // затем — запись в «Выплатах» с ID этой анкеты (триггер формы её не продублирует).
+  const form = FormApp.openById(FORM_ID);
+  const byKey = {};
+  form.getItems().forEach((x) => {
+    const t = x.getTitle().trim();
+    Object.keys(FIELDS).forEach((k) => { if (t.indexOf(FIELDS[k]) === 0) byKey[k] = x; });
   });
+  const reps = [];
+  const drafts = [];
+  try {
+    items.forEach((it, i) => {
+      const route = data.routes.filter((r) => r.id === it.routeId)[0];
+      const rep = {
+        source: 'сайт', comment: items.length > 1 ? 'Отчёт с сайта: строка ' + (i + 1) + ' из ' + items.length : 'Отчёт с сайта',
+        nick: who.nick, bank: bank, level: LEVELS[d.level], livery: LIVERY_TEXT[it.livery],
+        routeId: route.id, route: route.number, bus: String(it.bus).slice(0, 200),
+        glonass: d.glonass === 'Да' ? 'Да' : 'Нет', rounds: parseInt(it.rounds, 10), passengers: parseInt(it.passengers, 10) || 0,
+        proofRounds: proof.slice(0, 2000), proofPassengers: String(d.proofPassengers || '').trim().slice(0, 2000),
+        proofCosts: String(d.proofCosts || '').trim().slice(0, 2000),
+      };
+      const values = {
+        nick: rep.nick, bank: bank, level: LEVEL_FORM[d.level], bus: rep.bus, livery: rep.livery,
+        route: route.number + (route.group === 'mup' || route.group === 'troll' ? ' (МУП, ' + route.city + ')' : ''), glonass: rep.glonass,
+        rounds: String(rep.rounds), passengers: String(rep.passengers), proofRounds: rep.proofRounds,
+        proofPassengers: rep.proofPassengers || '-', proofCosts: rep.proofCosts || '-', signature: rep.nick,
+      };
+      const fr = form.createResponse();
+      Object.keys(values).forEach((k) => { if (byKey[k]) fr.withItemResponse(itemResponse_(byKey[k], values[k])); });
+      drafts.push(fr);
+      reps.push(rep);
+    });
+  } catch (e) {
+    return fail((items.length > 1 ? 'Строка ' + (reps.length + 1) + ': ' : '') + (e && e.message ? e.message : e));
+  }
+  const sent = [];
+  try {
+    drafts.forEach((fr, i) => {
+      const r = fr.submit();
+      reps[i].id = r.getId();
+      reps[i].date = r.getTimestamp();
+      sent.push(reps[i]);
+    });
+  } catch (e) {
+    appendReports_(sent, 'На проверке');
+    return fail('Отправлено строк: ' + sent.length + ' из ' + reps.length + '. Ошибка формы: ' + (e && e.message ? e.message : e));
+  }
   appendReports_(reps, 'На проверке');
   let total = 0;
   const notes = [];
@@ -293,6 +328,29 @@ function submitReport_(d) {
     c.notes.forEach((x) => notes.push(reps.length > 1 ? 'строка ' + (i + 1) + ': ' + x : x));
   });
   return { ok: true, total: total, lines: reps.length, notes: notes };
+}
+
+// Ответ на вопрос формы. Для выбора — вариант ищется без учёта пробелов и регистра,
+// для автобуса — запасной поиск по коду «[К-8]».
+function itemResponse_(item, value) {
+  const T = FormApp.ItemType;
+  const title = item.getTitle().trim();
+  const pick = (choices) => {
+    const n = (x) => String(x).replace(/\s+/g, '').toLowerCase();
+    let c = choices.filter((x) => n(x.getValue()) === n(value))[0];
+    const code = (x) => (String(x).match(/^\s*\[([^\]]+)\]/) || [])[1];
+    const cn = (x) => String(x || '').toUpperCase().replace(/C/g, 'С').replace(/M/g, 'М').replace(/K/g, 'К').replace(/\s+/g, '');
+    if (!c && code(value)) c = choices.filter((x) => cn(code(x.getValue())) === cn(code(value)))[0];
+    if (!c) throw new Error('в форме нет варианта «' + value + '» (вопрос «' + title + '»).');
+    return c.getValue();
+  };
+  switch (item.getType()) {
+    case T.TEXT: return item.asTextItem().createResponse(String(value));
+    case T.PARAGRAPH_TEXT: return item.asParagraphTextItem().createResponse(String(value));
+    case T.MULTIPLE_CHOICE: return item.asMultipleChoiceItem().createResponse(pick(item.asMultipleChoiceItem().getChoices()));
+    case T.LIST: return item.asListItem().createResponse(pick(item.asListItem().getChoices()));
+    default: throw new Error('вопрос «' + title + '» неподдерживаемого типа.');
+  }
 }
 
 // Автобусы для выбора на сайте: лист «Активный ПС» (столбцы: гараж, код, модель, госномер)
@@ -409,7 +467,7 @@ function payRow_(rep, data, status) {
   row[C['Возмещение'] - 1] = '';
   row[C['Итого'] - 1] = ''; // формула ставится после вставки
   row[C['Статус'] - 1] = status;
-  row[C['Комментарий'] - 1] = rep.comment || '';
+  row[C['Комментарий'] - 1] = rep.comment || '';  // для сайта: «Отчёт с сайта»
   row[C['Статус изменён'] - 1] = '';
   row[C['Выплачено'] - 1] = '';
   row[C['Доказательства'] - 1] = proofs;
