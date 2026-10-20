@@ -239,6 +239,9 @@ dialog.route::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(3p
 .side a { color: var(--text); padding: 10px 14px; border-radius: 10px; font-weight: 500; }
 .side a:hover { background: var(--surface); text-decoration: none; }
 .side a.active { background: var(--surface-2); color: var(--yellow); }
+/* заметная кнопка папки Google Диска (первая в меню) */
+.side a.drive-btn { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; background: var(--yellow); color: var(--black); font-weight: 700; box-shadow: 0 6px 18px rgba(255, 180, 36, .25); }
+.side a.drive-btn:hover { background: #ffc451; }
 .staff-layout section { padding: 0 0 48px; scroll-margin-top: 88px; }
 @media (max-width: 900px) {
   .staff-layout { grid-template-columns: minmax(0, 1fr); }
