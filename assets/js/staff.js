@@ -372,6 +372,7 @@
       proofRounds: $("r-proof-rounds").value, proofPassengers: $("r-proof-pass").value, proofCosts: $("r-proof-costs").value,
       items: rows.map((r) => ({ routeId: r.routeId, rounds: +r.rounds, passengers: +r.pass, livery: +r.livery, bus: r.bus })),
     };
+    if (rows.length === 1) Object.assign(body, body.items[0]); // старый формат — для прежней версии скрипта таблицы
     const btn = $("r-submit");
     btn.disabled = true;
     btn.textContent = "Отправляю…";
