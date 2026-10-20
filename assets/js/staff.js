@@ -163,7 +163,9 @@
   }
   const levelOf = (t) => {
     const s = String(t).replace(/[IІ]/g, "l");
-    return /lll/.test(s) ? "trainee" : /ll/.test(s) ? "driver" : /l/.test(s) ? "chauffeur" : null;
+    if (/стаж/i.test(s)) return "trainee"; // старые ответы формы: «Стажёр», «Водитель», «Шофёр»
+    if (/шоф/i.test(s)) return "chauffeur";
+    return /lll/.test(s) ? "trainee" : /ll/.test(s) ? "driver" : /l/.test(s) ? "chauffeur" : /водит/i.test(s) ? "driver" : null;
   };
   const liveryOf = (t) => (/15%/.test(t) ? 15 : /5%/.test(t) ? 5 : 0);
   const levelShort = { chauffeur: "I", driver: "II", trainee: "III" };
