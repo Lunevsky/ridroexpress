@@ -44,13 +44,16 @@
       <details class="acc" style="margin-top:16px">
         <summary><b>Как получить токен (один раз)</b></summary>
         <div class="acc-body">
+          <p><b>Совладелец</b> (сайт не на вашем аккаунте):</p>
           <ol class="howto">
-            <li>Войдите в свой аккаунт GitHub (вас должны добавить в соавторы репозитория сайта).</li>
-            <li>Откройте <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Settings → Developer settings → Fine-grained tokens → Generate new token</a>.</li>
-            <li>Resource owner — владелец репозитория (<b id="repo-owner">—</b>). Repository access — <b>Only select repositories</b> → <b id="repo-name">—</b>.</li>
-            <li>Permissions → Repository permissions → <b>Contents: Read and write</b>.</li>
-            <li>Нажмите Generate token, скопируйте и вставьте сюда. Никому не передавайте токен.</li>
+            <li>Владелец сайта добавляет вас: репозиторий <b id="repo-name">—</b> → Settings → Collaborators → Add people. Примите приглашение (придёт на почту и в уведомления GitHub).</li>
+            <li>Откройте <a href="https://github.com/settings/tokens/new?scopes=public_repo&amp;description=ridro-admin" target="_blank" rel="noopener">Settings → Developer settings → Tokens (classic) → Generate new token (classic)</a>.</li>
+            <li>Note — любое, Expiration — срок. В Scopes отметьте только <b>public_repo</b>.</li>
+            <li>Нажмите Generate token, скопируйте (начинается с <code>ghp_</code>) и вставьте сюда.</li>
           </ol>
+          <p style="margin-top:12px"><b>Владелец сайта</b> (<b id="repo-owner">—</b>) может вместо этого сделать токен только для этого сайта:
+            <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Fine-grained tokens</a> → Only select repositories → сайт → Contents: Read and write.</p>
+          <p class="muted">Никому не передавайте токен: с ним можно менять сайт. Если токен утёк — удалите его в тех же настройках GitHub.</p>
         </div>
       </details>
     </div>
