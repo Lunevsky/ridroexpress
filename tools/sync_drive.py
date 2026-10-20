@@ -36,6 +36,7 @@ DOCS = {  # id Google-документов (папка «ООО «Ridro» пуб
     "ustav": "1Tl43hFAl-uSDqUYsmMcSOxZpigBTs76I2UVJcjWuRTs",
 }
 SALARY_FILE = "1bsUeDeO7DewRA901brsubZbWw6DoeccF"  # «Заработные платы по маршрутам.docx» (обычный файл)
+REPORT_FORM = "1FAIpQLScDqdO9v4hG6FA9UHzmkP3jUDYJCJ_fnA0hL_5ljy0zSOm4Yg"  # публичная форма «Отчет …»
 
 HEAD = re.compile(r"^Маршрут\s*(?:№\s*)?(\S{1,4})$")
 SPLIT = re.compile(r"(?=Маршрут\s*№\s*\S{1,4}$)")
@@ -362,6 +363,17 @@ def build_ustav():
     return out + "\n"
 
 
+# ---------------- автобусы (список из формы отчёта) ----------------
+def build_buses():
+    page = download(f"https://docs.google.com/forms/d/e/{REPORT_FORM}/viewform").decode("utf8")
+    m = re.search(r"FB_PUBLIC_LOAD_DATA_\s*=\s*(.*?);\s*</script>", page, re.S)
+    if not m:
+        raise RuntimeError("в форме не найден FB_PUBLIC_LOAD_DATA_")
+    items = json.loads(m.group(1))[1][1]
+    q = next(i for i in items if str(i[1]).startswith("Выберите используемый"))
+    return [re.sub(r"\s+", " ", o[0]).strip() for o in q[4][0][1] if o[0].strip()]
+
+
 # ---------------- запуск ----------------
 def main():
     manual = json.loads((DATA / "manual.json").read_text(encoding="utf8"))
@@ -374,6 +386,8 @@ def main():
     write_if_changed(DATA / "routes.json", json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
     print("Бинды…")
     write_if_changed(DATA / "binds.json", json.dumps(build_binds(), ensure_ascii=False, indent=2) + "\n")
+    print("Автобусы…")
+    write_if_changed(DATA / "buses.json", json.dumps(build_buses(), ensure_ascii=False, indent=2) + "\n")
     print("Устав…")
     write_if_changed(DATA / "ustav.html", build_ustav())
     print("Готово:", len(routes), "маршрутов")

@@ -246,7 +246,7 @@
       const j = await (await fetch(site.sheetApi)).json();
       staffData = j.staff;
       reportsList = j.reports || [];
-      fillBuses(j.buses || []);
+      fillBuses(j.buses && j.buses.length ? j.buses : await load("buses").catch(() => []));
       const total = staffData.groups.reduce((n, g) => n + g.members.length, 0);
       $("staff-note").textContent = `Всего: ${total}` + (staffData.edited ? ` · последние правки таблицы: ${staffData.edited}` : "");
       renderStaff();

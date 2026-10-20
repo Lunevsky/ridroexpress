@@ -20,7 +20,7 @@
 const STAFF_SHEET = 'База сотрудников';
 const PAY_SHEET = 'Выплаты';
 const LEDGER_SHEET = 'Ведомость';
-const FLEET_SHEET = 'Активный ПС';
+const FLEET_SHEET = /^Активный\s*П\s*\/?\s*С/i; // «Активный П/С» или «Активный ПС»
 const FORM_ID = '1UQR-iV8ZK91ciFA7ByY0uuUupL4ntLjOiqT0cnGh-Wg'; // форма «Отчет ЧТУП «RidroExpress»»
 const SITE = 'https://lunevsky.github.io/ridroexpress/';
 const REPORTS_LIMIT = 300; // сколько последних отчётов отдавать сайту
@@ -276,7 +276,7 @@ function submitReport_(d) {
 
 // Автобусы для выбора на сайте: лист «Активный ПС» (столбцы: гараж, код, модель, госномер)
 function buses_() {
-  const sh = SpreadsheetApp.getActive().getSheetByName(FLEET_SHEET);
+  const sh = SpreadsheetApp.getActive().getSheets().filter((x) => FLEET_SHEET.test(x.getName().trim()))[0];
   if (!sh) return [];
   return sh.getDataRange().getDisplayValues()
     .filter((r) => /^[МСКЛMCKL]-\d+$/i.test(String(r[1]).trim()) && String(r[2]).trim())
