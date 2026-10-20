@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=20261020d">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261020e">
 </head>
 <body>
   <div class="stripes"></div>
@@ -89,14 +89,15 @@
           <div class="calc-out" id="c-out"></div>
           <form id="r-form" class="report-form" autocomplete="off">
             <div class="calc-grid">
-              <label class="field">Никнейм<input class="input" id="c-nick" placeholder="Имя_Фамилия" required></label>
-              <label class="field">Номер банковского счёта<input class="input" id="r-bank" inputmode="numeric" placeholder="как в базе сотрудников" required></label>
+              <label class="field">Никнейм<select class="input" id="c-nick" required><option value="">— выберите себя —</option></select></label>
+              <label class="field">Номер банковского счёта<input class="input" id="r-bank" inputmode="numeric" placeholder="как в базе сотрудников" autocomplete="off" required></label>
               <label class="field">Автобус<select class="input" id="r-bus"></select></label>
               <label class="field">ГЛОНАСС использовался?<select class="input" id="r-glonass"><option>Нет</option><option>Да</option></select></label>
             </div>
             <label class="field">Скриншоты кругорейсов (ссылки)<textarea class="input" id="r-proof-rounds" rows="2" placeholder="https://…" required></textarea></label>
             <label class="field">Скриншоты пассажиров (ссылки, если были)<textarea class="input" id="r-proof-pass" rows="2"></textarea></label>
             <label class="field">Доказательства трат на топливо и табличку (если нужно возмещение)<textarea class="input" id="r-proof-costs" rows="2"></textarea></label>
+            <label class="check"><input type="checkbox" id="r-remember" checked> Запомнить счёт на этом устройстве</label>
             <label class="check"><input type="checkbox" id="r-ok" required> Данные в отчёте верны</label>
             <div class="calc-send">
               <button class="btn btn-primary" type="submit" id="r-submit">Отправить отчёт</button>
@@ -181,7 +182,7 @@
     </div>
   </footer>
 
-  <script src="assets/js/common.js?v=20261020d"></script>
-  <script src="assets/js/staff.js?v=20261020d"></script>
+  <script src="assets/js/common.js?v=20261020e"></script>
+  <script src="assets/js/staff.js?v=20261020e"></script>
 </body>
 </html>

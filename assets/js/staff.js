@@ -112,7 +112,6 @@
   const cRoute = $("c-route");
   cRoute.innerHTML = data.groups.map((g) => `<optgroup label="${esc(g.name)}">${routes.filter((r) => r.group === g.id && r.salary)
     .map((r) => `<option value="${esc(r.id)}">${esc(r.number)} · ${esc(r.from)} → ${esc(r.to)}</option>`).join("")}</optgroup>`).join("");
-  $("c-nick").value = store.get("ridro-nick") || "";
   const fillBus = () => {
     const r = routes.find((x) => x.id === cRoute.value);
     $("c-bus").innerHTML = `<option value="0">Без надбавки</option>` +
@@ -251,6 +250,7 @@
       const j = await (await fetch(site.sheetApi)).json();
       staffData = j.staff;
       reportsList = j.reports || [];
+      fillNicks(staffData);
       fillBuses(j.buses && j.buses.length ? j.buses : await load("buses").catch(() => []));
       const total = staffData.groups.reduce((n, g) => n + g.members.length, 0);
       $("staff-note").textContent = `Всего: ${total}` + (staffData.edited ? ` · последние правки таблицы: ${staffData.edited}` : "");
@@ -263,6 +263,27 @@
   loadSheet();
 
   // ---- сдача отчёта на сайте → таблица «Выплаты» (Apps Script doPost) ----
+  // Ник — из списка сотрудников. Счёт хранится только на этом устройстве (на сайт счета не выкладываются).
+  const banks = () => { try { return JSON.parse(store.get("ridro-banks") || "{}"); } catch { return {}; } };
+  function fillNicks(staff) {
+    const keep = $("c-nick").value || store.get("ridro-nick") || "";
+    const nicks = [...new Set(staff.groups.flatMap((g) => g.members.map((m) => m.nick)).filter((n) => /^[A-Za-z]+_[A-Za-z]+$/.test(n)))]
+      .sort((a, b) => a.localeCompare(b));
+    $("c-nick").innerHTML = `<option value="">— выберите себя —</option>` +
+      nicks.map((n) => `<option ${n === keep ? "selected" : ""}>${esc(n)}</option>`).join("");
+    fillBank();
+  }
+  function fillBank() {
+    const b = banks()[$("c-nick").value];
+    if (b) $("r-bank").value = b;
+  }
+  $("c-nick").addEventListener("change", () => { $("r-bank").value = ""; fillBank(); });
+  $("r-bank").addEventListener("input", () => {
+    const digits = $("r-bank").value.replace(/\D/g, "");
+    const nick = Object.keys(banks()).find((n) => banks()[n] === digits);
+    if (nick && nick !== $("c-nick").value) { $("c-nick").value = nick; renderCalc(); }
+  });
+
   function fillBuses(list) {
     const keep = $("r-bus").value || store.get("ridro-bus") || "";
     $("r-bus").innerHTML = `<option value="">— выберите автобус —</option>` +
@@ -287,7 +308,10 @@
       const res = await (await fetch(site.sheetApi, { method: "POST", body: JSON.stringify(body) })).json();
       if (!res.ok) return say(res.error || "Отчёт не принят.", false);
       say(`Отчёт принят и отправлен на проверку. Расчёт: ${money(res.total)}.` + (res.notes?.length ? ` Администрация проверит: ${res.notes.join("; ")}.` : ""), true);
-      ["r-proof-rounds", "r-proof-pass", "r-proof-costs", "r-bank"].forEach((id) => { $(id).value = ""; });
+      const saved = banks();
+      if ($("r-remember").checked) saved[body.nick] = body.bank.replace(/\D/g, ""); else delete saved[body.nick];
+      store.set("ridro-banks", JSON.stringify(saved));
+      ["r-proof-rounds", "r-proof-pass", "r-proof-costs"].forEach((id) => { $(id).value = ""; });
       $("r-ok").checked = false;
       loadSheet();
     } catch {
