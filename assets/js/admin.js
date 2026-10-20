@@ -56,7 +56,7 @@
   }
 
   // ---------- состояние ----------
-  const docs = { routes: null, site: null };
+  const docs = { routes: null, site: null, manual: null };
   const dirty = { routes: false, site: false };
   let current = null;
   let user = null;
@@ -69,7 +69,7 @@
     user = await api("/user");
     const repo = await api(`/repos/${R.owner}/${R.repo}`);
     if (!repo.permissions?.push) throw new Error("У этого аккаунта нет прав на изменение сайта. Попросите добавить вас в соавторы репозитория.");
-    [docs.routes, docs.site] = await Promise.all([readFile("data/routes.json"), readFile("data/site.json")]);
+    [docs.routes, docs.site, docs.manual] = await Promise.all([readFile("data/routes.json"), readFile("data/site.json"), readFile("data/manual.json")]);
     if (remember) store.set("ridro-gh-token", t);
     try { sessionStorage.setItem("ridro-gh-token", t); } catch {}
     $("who").textContent = `Вы: ${user.login}`;
@@ -113,6 +113,7 @@
     btn.textContent = "Сохраняю…";
     try {
       if (dirty.routes) {
+        docs.manual.sha = await writeFile("data/manual.json", textToB64(JSON.stringify(docs.manual.data, null, 2) + "\n"), `Ручные данные маршрутов (${user.login})`, docs.manual.sha);
         docs.routes.data.updated = new Date().toISOString().slice(0, 10);
         docs.routes.sha = await writeFile("data/routes.json", textToB64(JSON.stringify(docs.routes.data, null, 2) + "\n"), `Маршруты обновлены (${user.login})`, docs.routes.sha);
         dirty.routes = false;
@@ -132,6 +133,22 @@
       btn.textContent = "Сохранить на сайт";
     }
   });
+
+  // ---------- ручной слой (data/manual.json) ----------
+  // Маршруты из документов на диске: руками правятся только город, конечные и примечание.
+  // Маршруты, которых нет в документах («extra»), правятся целиком.
+  const MANUAL_FIELDS = ["city", "from", "to", "note"];
+  const extras = () => docs.manual.data.extra;
+  const isExtra = (r) => extras().some((e) => e.id === r.id);
+  function syncManual(r) {
+    if (isExtra(r)) {
+      const i = extras().findIndex((e) => e.id === r.id);
+      extras()[i] = { ...JSON.parse(JSON.stringify(r)), _after: extras()[i]._after ?? null };
+    } else {
+      const o = (docs.manual.data.routes[r.id] = docs.manual.data.routes[r.id] || {});
+      MANUAL_FIELDS.forEach((k) => { if (r[k]) o[k] = r[k]; else delete o[k]; });
+    }
+  }
 
   // ---------- маршруты: список ----------
   const routes = () => docs.routes.data.routes;
@@ -154,6 +171,7 @@
       sign: { name: "", line1: "", line2: "" }, binds: [], busBonus: [], map: "", note: "",
     };
     routes().push(r);
+    extras().push({ ...JSON.parse(JSON.stringify(r)), _after: null });
     markDirty("routes");
     selectRoute(r.id);
   });
@@ -168,6 +186,7 @@
     const f = $("route-form");
     if (!r) { f.innerHTML = `<p class="muted">Выберите маршрут слева.</p>`; return; }
     const cities = [...new Set(routes().map((x) => x.city).filter(Boolean))];
+    if (!isExtra(r)) return driveForm(f, r, cities);
     f.innerHTML = `
       <div class="form-block">
         <h3>Основное</h3>
@@ -221,17 +240,53 @@
       const el = e.target;
       if (!el.name) return;
       setField(r, el.name, el.value, el.type);
+      syncManual(r);
       markDirty("routes");
       if (["number", "from", "to", "group"].includes(el.name)) renderList();
     };
     $("del-route").onclick = () => {
       if (!confirm(`Удалить маршрут ${r.number} (${r.from} → ${r.to})?`)) return;
       docs.routes.data.routes = routes().filter((x) => x !== r);
+      docs.manual.data.extra = extras().filter((e) => e.id !== r.id);
       markDirty("routes");
       selectRoute(routes()[0]?.id);
     };
-    $("add-bonus").onclick = () => { r.busBonus = r.busBonus || []; r.busBonus.push({ type: "", models: "", amount: 0 }); markDirty("routes"); renderBonus(r); };
+    $("add-bonus").onclick = () => { r.busBonus = r.busBonus || []; r.busBonus.push({ type: "", models: "", amount: 0 }); syncManual(r); markDirty("routes"); renderBonus(r); };
     $("map-file").onchange = (e) => uploadMap(r, e.target.files[0]);
+  }
+
+  function driveForm(f, r, cities) {
+    const s = r.salary || {};
+    f.innerHTML = `
+      <div class="notice" style="margin-bottom:18px">Этот маршрут берётся из документов на Google Диске: номер, проезд, ЗП, остановки, табличка, бинды, скриншоты, надбавки и карта.
+        Меняйте их в документе — сайт обновится сам в течение ~30 минут. Здесь правится только то, чего в документах нет.</div>
+      <div class="form-block">
+        <h3>Маршрут ${esc(r.number)} · ${esc(groups().find((g) => g.id === r.group)?.name || r.group)}</h3>
+        <div class="form-cols">
+          <label class="field">Город<input class="input" name="city" value="${esc(r.city)}" list="cities"><datalist id="cities">${cities.map((c) => `<option value="${esc(c)}">`).join("")}</datalist></label>
+          <label class="field">Откуда<input class="input" name="from" value="${esc(r.from)}"></label>
+          <label class="field">Куда<input class="input" name="to" value="${esc(r.to)}"></label>
+        </div>
+        <label class="field">Примечание <span class="hint">видно пассажирам</span><textarea class="input" name="note" rows="2">${esc(r.note)}</textarea></label>
+      </div>
+      <div class="form-block">
+        <h3>С диска (только просмотр)</h3>
+        <dl class="kv">
+          <dt>Проезд</dt><dd>${r.fare ?? "—"} ₽</dd>
+          <dt>ЗП III / II / I</dt><dd>${s.trainee ?? "—"} / ${s.driver ?? "—"} / ${s.chauffeur ?? "—"} ₽</dd>
+          <dt>Остановки</dt><dd>${esc(r.stops.join(", "))}</dd>
+          <dt>Скриншоты</dt><dd>${esc(r.screenshots.join(" → "))}</dd>
+        </dl>
+        ${r.map ? `<img class="map-preview" src="${esc(r.map)}" alt="">` : ""}
+      </div>
+      <div class="form-actions"><span class="hint">ID: ${esc(r.id)}</span></div>`;
+    f.oninput = (e) => {
+      if (!MANUAL_FIELDS.includes(e.target.name)) return;
+      r[e.target.name] = e.target.value;
+      syncManual(r);
+      markDirty("routes");
+      renderList();
+    };
   }
 
   const ARRAY_FIELDS = ["stops", "screenshots", "binds"];
@@ -256,11 +311,13 @@
       e.stopPropagation();
       const k = e.target.dataset.k;
       r.busBonus[row.dataset.i][k] = k === "amount" ? Number(e.target.value) : e.target.value;
+      syncManual(r);
       markDirty("routes");
     };
     $("bonus-rows").onclick = (e) => {
       if (!e.target.closest("[data-del]")) return;
       r.busBonus.splice(e.target.closest(".bonus-row").dataset.i, 1);
+      syncManual(r);
       markDirty("routes");
       renderBonus(r);
     };
@@ -290,7 +347,7 @@
       ]);
       await writeFile(full, b64Full, `Карта маршрута ${r.number} (${user.login})`, shaFull);
       await writeFile(thumb, b64Thumb, `Превью карты маршрута ${r.number} (${user.login})`, shaThumb);
-      if (r.map !== full) { r.map = full; markDirty("routes"); }
+      if (r.map !== full) { r.map = full; syncManual(r); markDirty("routes"); }
       const prev = $("map-preview");
       prev.src = URL.createObjectURL(file);
       prev.hidden = false;
@@ -313,7 +370,7 @@
     penalties: "Наказания", rule: "Нарушение", penalty: "Наказание", purchaseBonus: "Надбавка за покупку автобуса",
     range: "Диапазон цены", amount: "Сумма, ₽", purchaseBonusNote: "Пояснение к надбавке", liveries: "Фирменные раскраски",
     colors: "Цвета (HEX)", binds: "Общие бинды", section: "Раздел", items: "Строки", pivo: "ПИВО — шаги",
-    pivoFaq: "ПИВО — частые вопросы", q: "Вопрос", a: "Ответ",
+    sheetApi: "Адрес данных таблицы (Apps Script, …/exec) — для списка сотрудников и отчётов",
   };
   const blankLike = (v) => Array.isArray(v) ? [] : v && typeof v === "object"
     ? Object.fromEntries(Object.keys(v).map((k) => [k, blankLike(v[k])])) : typeof v === "number" ? 0 : "";

@@ -282,3 +282,21 @@ tbody tr.group-row td { background: #121212; color: var(--yellow); font-weight: 
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: .75rem; font-weight: 700; background: var(--surface-2); color: var(--muted); }
 .badge.warn { background: #3a2c0c; color: var(--yellow); }
+
+/* ---------- Калькулятор, отчёты, сотрудники, устав ---------- */
+.hint { font-size: .8rem; color: var(--muted); font-weight: 400; margin: 12px 0 0; }
+.calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.calc-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 18px 0; }
+.calc-out .fact.total { background: var(--yellow); color: var(--black); }
+.calc-out .fact.total span { color: rgba(0, 0, 0, .65); }
+.calc-out .fact.minus b { color: #ff8d8d; }
+.calc-send { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.calc-send .field { flex: 1 1 220px; }
+.notice { padding: 18px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); }
+.ustav { line-height: 1.6; }
+.ustav h3 { color: var(--yellow); margin: 22px 0 8px; font-size: 1.2rem; }
+.ustav h4 { margin: 16px 0 6px; font-family: var(--font); font-weight: 700; font-size: 1rem; }
+.ustav p { margin: 0 0 8px; white-space: normal; }
+.ustav img { max-width: 100%; border-radius: 10px; margin: 8px 0; }
+.ustav-box summary { padding: 16px; }
+.more { margin-top: 12px; }

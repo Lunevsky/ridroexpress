@@ -36,13 +36,16 @@
     <nav class="side" id="side">
       <a href="#s-routes">Маршруты</a>
       <a href="#s-salary">Зарплата</a>
+      <a href="#s-calc">Калькулятор ЗП</a>
+      <a href="#s-reports">Отчёты</a>
+      <a href="#s-staff">Сотрудники</a>
       <a href="#s-bonus">Надбавки</a>
       <a href="#s-ranks">Должности</a>
       <a href="#s-rules">Правила рейса</a>
       <a href="#s-penalties">Наказания</a>
       <a href="#s-liveries">Раскраска</a>
       <a href="#s-binds">Бинды</a>
-      <a href="#s-pivo">ПИВО</a>
+      <a href="#s-ustav">Устав</a>
     </nav>
 
     <main>
@@ -63,6 +66,49 @@
         <div class="table-wrap"><table id="salary-table"></table></div>
       </section>
 
+      <section id="s-calc">
+        <h2>Калькулятор зарплаты</h2>
+        <p class="muted">Примерный расчёт за отчёт. Без личной надбавки и возмещений за топливо и табличку.</p>
+        <div class="panel calc">
+          <div class="calc-grid">
+            <label class="field">Маршрут<select class="input" id="c-route"></select></label>
+            <label class="field">Класс<select class="input" id="c-level">
+              <option value="chauffeur">Водитель I класса (шофёр)</option>
+              <option value="driver" selected>Водитель II класса (водитель)</option>
+              <option value="trainee">Водитель III класса (стажёр)</option>
+            </select></label>
+            <label class="field">Кругорейсы<input class="input" id="c-rounds" type="number" min="0" value="1"></label>
+            <label class="field">Пассажиры<input class="input" id="c-pass" type="number" min="0" value="0"></label>
+            <label class="field">Окраска автобуса<select class="input" id="c-livery">
+              <option value="0">Фирменный или уникальный</option>
+              <option value="5">В стилистике фирменной раскраски (−5%)</option>
+              <option value="15">Ненормативный (−15%)</option>
+            </select></label>
+            <label class="field">Тип автобуса (надбавка)<select class="input" id="c-bus"></select></label>
+          </div>
+          <div class="calc-out" id="c-out"></div>
+          <div class="calc-send">
+            <label class="field">Ваш никнейм<input class="input" id="c-nick" placeholder="Name_Surname"></label>
+            <a class="btn btn-primary" id="c-send" target="_blank" rel="noopener">Заполнить отчёт в форме ↗</a>
+          </div>
+          <p class="hint">Форма откроется с подставленными ником, классом, маршрутом, окраской, кругами и пассажирами. Счёт, автобус и скриншоты укажите в форме.</p>
+        </div>
+      </section>
+
+      <section id="s-reports">
+        <h2>Отчёты</h2>
+        <p class="muted" id="reports-note">Присланные через форму отчёты. ЗП — примерная, без надбавок за автобус.</p>
+        <div class="toolbar"><label class="field">Поиск<input class="input" id="rep-q" type="search" placeholder="Ник или маршрут"></label></div>
+        <div id="reports"></div>
+      </section>
+
+      <section id="s-staff">
+        <h2>Сотрудники</h2>
+        <p class="muted" id="staff-note"></p>
+        <div class="toolbar"><label class="field">Поиск<input class="input" id="staff-q" type="search" placeholder="Ник или имя"></label></div>
+        <div id="staff"></div>
+      </section>
+
       <section id="s-bonus">
         <h2>Надбавки</h2>
         <div class="cols">
@@ -76,7 +122,6 @@
             <ul class="list">
               <li>За тип автобуса — своя на каждом маршруте (см. карточку маршрута).</li>
               <li>За пассажиров — по перевозчику (см. таблицу зарплат).</li>
-              <li>За ПИВО — при отправке отчёта и разделении кругов кнопкой «Круг».</li>
               <li>Списание автобуса: 100 ₽ (без фонда) или 250 ₽ (деньги в фонд) за кругорейс.</li>
             </ul>
           </div>
@@ -109,12 +154,10 @@
         <div id="binds"></div>
       </section>
 
-      <section id="s-pivo">
-        <h2>ПИВО — трекинг рейсов</h2>
-        <p class="muted">Программа отправляет руководству ваш путь и скорость. Обязательна для надбавки.</p>
-        <div class="steps" id="pivo"></div>
-        <h3 style="margin-top:28px">Частые вопросы</h3>
-        <div id="pivo-faq"></div>
+      <section id="s-ustav">
+        <h2>Устав</h2>
+        <p class="muted">Полный текст устава — автоматически с Google Диска.</p>
+        <details class="acc ustav-box"><summary><b>Открыть устав</b></summary><div class="acc-body ustav" id="ustav"></div></details>
       </section>
     </main>
   </div>
