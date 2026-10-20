@@ -387,7 +387,7 @@ function siteRoutes_() {
   let json = cacheGet_('routes');
   if (!json) {
     json = UrlFetchApp.fetch(SITE + 'data/routes.json?t=' + Date.now()).getContentText();
-    cachePut_('routes', json, 3600);
+    cachePut_('routes', json, 600); // 10 мин: правки маршрутов/ставок быстро доходят до расчётов
   }
   return JSON.parse(json);
 }
